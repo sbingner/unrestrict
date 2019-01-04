@@ -1,28 +1,44 @@
 TARGET  = Unrestrict.dylib
 OUTDIR ?= bin
+DSYMDIR ?= dsym
 PREFIX ?= /Library/MobileSubstrate/ServerPlugins
+ARCHS  ?= arm64
 SRC     = $(wildcard *.c helpers/*.c)
+OBJ	= $(SRC:.c=.o)
 
-CC      = xcrun -sdk iphoneos gcc -arch arm64 -arch armv7 -arch armv7s
+CC      = xcrun -sdk iphoneos gcc $(patsubst %,-arch %,$(ARCHS))
 LDID    = ldid
-CFLAGS  = -dynamiclib -I. -I./helpers -framework IOKit -framework CoreFoundation -Wno-deprecated-declarations
+CFLAGS  = -I. -I./helpers -Wno-deprecated-declarations -g
+LDFLAGS = -dynamiclib -framework IOKit -framework CoreFoundation
+
+ifeq ($(DEBUG),1)
+CFLAGS += -DDEBUG
+endif
 
 .PHONY: all install clean
 
 all: $(OUTDIR)/$(TARGET)
+
+%.o: %.c
+	$(CC) -c $(CFLAGS) -o $@ $^
 
 install: all
 	install -d "$(DESTDIR)$(PREFIX)"
 	install $(OUTDIR)/$(TARGET) "$(DESTDIR)$(PREFIX)"
 
 $(OUTDIR):
-	mkdir -p $(OUTDIR)
+	mkdir -p $@
 
-$(OUTDIR)/$(TARGET): $(SRC) | $(OUTDIR)
-	$(CC) $(CFLAGS) -install_name $(PREFIX)/$(TARGET) -o $@ $^ $(DEBUG)
+$(DSYMDIR):
+	mkdir -p $@
+
+$(OUTDIR)/$(TARGET): $(OBJ) | $(OUTDIR) $(DSYMDIR)
+	$(CC) $(LDFLAGS) -install_name $(PREFIX)/$(TARGET) -o $@ $^
+	dsymutil $@ -out $(DSYMDIR)/$(TARGET).dSYM
+	strip -S $@
 	$(LDID) -S $@
 
 install: all
 
 clean:
-	rm -rf $(OUTDIR)
+	rm -rf $(OUTDIR) $(OBJ)
