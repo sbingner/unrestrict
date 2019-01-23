@@ -11,45 +11,23 @@ FILE *log_file = NULL;
 #define CS_OPS_STATUS           0       /* return status */
 int csops(pid_t pid, unsigned int  ops, void * useraddr, size_t usersize);
 
-const char *blacklist[] = {
-    "diagnosticd",    // syslog
-    "logd",       // logd - things that log when this is starting end badly so...
-    "jailbreakd",               // gotta call to this
-    NULL
-};
-
-bool is_blacklisted(const char *proc) {
-    for (const char **entry = blacklist; *entry; entry++) {
-        if (strstr(proc, *entry)) {
-            DEBUGLOG("blacklisted");
-            return true;
-        }
-    }
-    DEBUGLOG("not blacklisted");
-    return false;
-}
-
 bool MSunrestrict0(mach_port_t task) {
     bool do_sandbox = false;
     char pathbuf[PROC_PIDPATHINFO_MAXSIZE];
     bzero(pathbuf, sizeof(pathbuf));
 
-    pid_t ourpid;
-    if ( (pid_for_task(task, &ourpid) != 0) || ourpid <= 1) {
+    pid_t pid;
+    if ( (pid_for_task(task, &pid) != 0) || pid <= 1) {
         return true;
     }
-    proc_pidpath(ourpid, pathbuf, sizeof(pathbuf));
+    proc_pidpath(pid, pathbuf, sizeof(pathbuf));
 
     if (strcmp(pathbuf, "/usr/libexec/xpcproxy")==0) {
         return true;
     }
 
-    if (!is_blacklisted(pathbuf)) {
-        DEBUGLOG("%s: (%d) fixing up", pathbuf, ourpid);
-        fixup(ourpid);
-    } else {
-        DEBUGLOG("%s: blacklisted", pathbuf);
-    }
+    DEBUGLOG("%s: (%d) fixing up", pathbuf, pid);
+    fixup(pid);
     return true;
 }
 
@@ -57,23 +35,23 @@ bool MSrevalidate0(mach_port_t task) {
     char pathbuf[PROC_PIDPATHINFO_MAXSIZE];
     bzero(pathbuf, sizeof(pathbuf));
 
-    pid_t ourpid;
-    if ( (pid_for_task(task, &ourpid) != 0) || ourpid <= 1) {
+    pid_t pid;
+    if ( (pid_for_task(task, &pid) != 0) || pid <= 1) {
         return true;
     }
-    proc_pidpath(ourpid, pathbuf, sizeof(pathbuf));
+    proc_pidpath(pid, pathbuf, sizeof(pathbuf));
 
     if (strcmp(pathbuf, "/usr/libexec/xpcproxy")==0) {
         return true;
     }
 
     uint32_t status;
-    if (csops(ourpid, CS_OPS_STATUS, &status, sizeof(status)) < 0)
-       return true;
+    if (csops(pid, CS_OPS_STATUS, &status, sizeof(status)) < 0)
+        return true;
 
-    uint64_t proc = proc_find(ourpid);
+    uint64_t proc = proc_find(pid);
     if (proc == 0) {
-        DEBUGLOG("failed to find proc for pid %d!", ourpid);
+        DEBUGLOG("failed to find proc for pid %d!", pid);
         return true;
     }
 
