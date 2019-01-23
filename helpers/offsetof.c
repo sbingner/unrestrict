@@ -1,4 +1,3 @@
-
 #define offsetof_p_pid (unsigned)(0x10)    // proc_t::p_pid
 #define offsetof_task (unsigned)(0x18)    // proc_t::task
 #define offsetof_p_uid (unsigned)(0x30)    // proc_t::p_uid

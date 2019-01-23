@@ -22,7 +22,6 @@ mach_port_t prepare_user_client() {
         exit(EXIT_FAILURE);
     }
     
-    
     DEBUGLOG("got user client: 0x%x", user_client);
     return user_client;
 }

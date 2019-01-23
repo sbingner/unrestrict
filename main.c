@@ -27,8 +27,8 @@ void ctor() {
     CFDataRef off_file_data;
     SInt32 errorCode;
     Boolean status = CFURLCreateDataAndPropertiesFromResource(
-		    kCFAllocatorDefault, fileURL, &off_file_data,
-		    NULL, NULL, &errorCode);
+            kCFAllocatorDefault, fileURL, &off_file_data,
+            NULL, NULL, &errorCode);
 
     CFRelease(fileURL);
     if (!status) {
@@ -55,7 +55,7 @@ void ctor() {
     kernel_slide            = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("KernelSlide")), kCFStringEncodingUTF8), NULL, 16);
     DEBUGLOG("kern base: %llx, slide: %llx", kernel_base, kernel_slide);
 
-    uint64_t kernproc            = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("KernProc")), kCFStringEncodingUTF8), NULL, 16);
+    uint64_t kernproc       = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("KernProc")), kCFStringEncodingUTF8), NULL, 16);
     DEBUGLOG("kernproc: %llx", kernproc);
     offset_zonemap          = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("ZoneMapOffset")), kCFStringEncodingUTF8), NULL, 16);
     DEBUGLOG("offset_zonemap: %llx", offset_zonemap);
@@ -75,9 +75,9 @@ void ctor() {
     // tfp0, patchfinder, kexecute
     err = host_get_special_port(mach_host_self(), HOST_LOCAL_NODE, 4, &tfp0);
     if (err != KERN_SUCCESS) {
-	    DEBUGLOG("host_get_special_port 4: %s", mach_error_string(err));
-	    tfp0 = KERN_INVALID_TASK;
-	    return;
+        DEBUGLOG("host_get_special_port 4: %s", mach_error_string(err));
+        tfp0 = KERN_INVALID_TASK;
+        return;
     }
     DEBUGLOG("tfp0: %x", tfp0);
 

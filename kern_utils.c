@@ -1,5 +1,3 @@
-//#import <Foundation/Foundation.h>
-
 #include <sched.h>
 #include <sys/param.h>
 #include <sys/stat.h>
@@ -18,7 +16,6 @@ uint64_t kernel_slide;
 
 uint64_t kernprocaddr;
 uint64_t offset_zonemap;
-
 uint64_t offset_add_ret_gadget;
 uint64_t offset_osboolean_true;
 uint64_t offset_osboolean_false;
@@ -213,7 +210,7 @@ void set_amfi_entitlements(uint64_t proc) {
             free(entitlementString);
         }
 
-        if (!foundEntitlements){
+        if (!foundEntitlements) {
             rv = OSArray_Merge(present, get_exception_osarray());
         } else {
             rv = 1;
