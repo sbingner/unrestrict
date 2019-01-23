@@ -43,7 +43,7 @@ int OSDictionary_SetItem(uint64_t dict, const char *key, uint64_t val) {
 // to vtable addr saved before
 
 // address if exists, 0 if not
-uint64_t _OSDictionary_GetItem(uint64_t dict, const char *key) {
+int _OSDictionary_GetItem(uint64_t dict, const char *key) {
     size_t len = strlen(key) + 1;
 
     uint64_t ks = kalloc(len);
