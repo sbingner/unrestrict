@@ -11,8 +11,6 @@
 #include "helpers/kexecute.h"
 #include "helpers/kmem.h"
 
-#define PROC_PIDPATHINFO_MAXSIZE (4 * MAXPATHLEN)
-
 __attribute__((constructor))
 void ctor() {
     kern_return_t err;
@@ -55,8 +53,8 @@ void ctor() {
     kernel_slide            = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("KernelSlide")), kCFStringEncodingUTF8), NULL, 16);
     DEBUGLOG("kern base: %llx, slide: %llx", kernel_base, kernel_slide);
 
-    uint64_t kernproc       = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("KernProc")), kCFStringEncodingUTF8), NULL, 16);
-    DEBUGLOG("kernproc: %llx", kernproc);
+    offset_kernel_task      = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("KernelTask")), kCFStringEncodingUTF8), NULL, 16);
+    DEBUGLOG("offset_kernel_task: %llx", offset_kernel_task);
     offset_zonemap          = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("ZoneMapOffset")), kCFStringEncodingUTF8), NULL, 16);
     DEBUGLOG("offset_zonemap: %llx", offset_zonemap);
 
@@ -72,7 +70,7 @@ void ctor() {
     DEBUGLOG("offset_smalloc: %llx", offset_smalloc);
     CFRelease(offsets);
 
-    // tfp0, patchfinder, kexecute
+    // tfp0, kexecute
     err = host_get_special_port(mach_host_self(), HOST_LOCAL_NODE, 4, &tfp0);
     if (err != KERN_SUCCESS) {
         DEBUGLOG("host_get_special_port 4: %s", mach_error_string(err));
@@ -80,9 +78,6 @@ void ctor() {
         return;
     }
     DEBUGLOG("tfp0: %x", tfp0);
-
-    kernprocaddr = rk64(kernproc);
-    DEBUGLOG("kernprocaddr: %llx", kernprocaddr);
 
     init_kexecute();
 }
