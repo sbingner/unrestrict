@@ -1,13 +1,13 @@
 #define offsetof_p_pid (unsigned)(0x10)    // proc_t::p_pid
 #define offsetof_task (unsigned)(0x18)    // proc_t::task
-#define offsetof_p_uid (unsigned)(0x30)    // proc_t::p_uid
-#define offsetof_p_gid (unsigned)(0x34)    // proc_t::p_uid
-#define offsetof_p_ruid (unsigned)(0x38)    // proc_t::p_uid
-#define offsetof_p_rgid (unsigned)(0x3c)    // proc_t::p_uid
-#define offsetof_p_svuid (unsigned)(0x40)    // proc_t::p_uid
-#define offsetof_p_svgid (unsigned)(0x44)    // proc_t::p_uid
+#define offsetof_p_gid (unsigned)(0x34) // proc_t::p_gid
+#define offsetof_p_ruid (unsigned)(0x38) // proc_t::ruid
+#define offsetof_p_rgid (unsigned)(0x3c) // proc_t::rgid
+#define offsetof_p_svuid (unsigned)(0x40) // proc_t::svuid
+#define offsetof_p_svgid (unsigned)(0x44) // proc_t::svgid
 #define offsetof_p_ucred (unsigned)(0x100)    // proc_t::p_ucred
 #define offsetof_p_csflags (unsigned)(0x2a8)    // proc_t::p_csflags
+#define offsetof_p_p_list (unsigned)(0x8) // proc_t::p_list
 #define offsetof_itk_self (unsigned)(0xD8)    // task_t::itk_self (convert_task_to_port)
 #define offsetof_itk_sself (unsigned)(0xE8)    // task_t::itk_sself (task_get_special_port)
 #define offsetof_itk_bootstrap (unsigned)0x2b8    // task_t::itk_bootstrap (task_get_special_port)

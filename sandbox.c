@@ -241,7 +241,6 @@ int has_file_extension(uint64_t sb, const char* path) {
             ext_lst = rk64(ext_lst);
         }
         
-        
         free(exist);
     }
     

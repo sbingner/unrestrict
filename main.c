@@ -55,8 +55,8 @@ void ctor() {
     kernel_slide            = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("KernelSlide")), kCFStringEncodingUTF8), NULL, 16);
     DEBUGLOG("kern base: %llx, slide: %llx", kernel_base, kernel_slide);
 
-    uint64_t kernproc       = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("KernProc")), kCFStringEncodingUTF8), NULL, 16);
-    DEBUGLOG("kernproc: %llx", kernproc);
+    offset_kernel_task      = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("KernelTask")), kCFStringEncodingUTF8), NULL, 16);
+    DEBUGLOG("offset_kernel_task: %llx", offset_kernel_task);
     offset_zonemap          = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("ZoneMapOffset")), kCFStringEncodingUTF8), NULL, 16);
     DEBUGLOG("offset_zonemap: %llx", offset_zonemap);
 
@@ -80,9 +80,6 @@ void ctor() {
         return;
     }
     DEBUGLOG("tfp0: %x", tfp0);
-
-    kernprocaddr = rk64(kernproc);
-    DEBUGLOG("kernprocaddr: %llx", kernprocaddr);
 
     init_kexecute();
 }

@@ -14,7 +14,7 @@ mach_port_t tfp0;
 uint64_t kernel_base;
 uint64_t kernel_slide;
 
-uint64_t kernprocaddr;
+uint64_t offset_kernel_task;
 uint64_t offset_zonemap;
 uint64_t offset_add_ret_gadget;
 uint64_t offset_osboolean_true;
@@ -22,41 +22,24 @@ uint64_t offset_osboolean_false;
 uint64_t offset_osunserializexml;
 uint64_t offset_smalloc;
 
-// Please call `proc_release` after you are finished with your proc!
 uint64_t proc_find(int pid) {
-    uint64_t proc = kernprocaddr;
+    uint64_t proc = rk64(rk64(offset_kernel_task) + offsetof_bsd_info);
     
     while (proc) {
-        uint32_t found_pid = rk32(proc + 0x10);
+        uint32_t found_pid = rk32(proc + offsetof_p_pid);
         
         if (found_pid == pid) {
             return proc;
         }
         
-        proc = rk64(proc + 0x8);
+        proc = rk64(proc + offsetof_p_p_list);
     }
     
     return 0;
 }
 
 CACHED_FIND(uint64_t, our_task_addr) {
-    uint64_t proc = rk64(kernprocaddr + 0x8);
-    
-    while (proc) {
-        uint32_t proc_pid = rk32(proc + 0x10);
-        
-        if (proc_pid == getpid()) {
-            break;
-        }
-        
-        proc = rk64(proc + 0x8);
-    }
-    
-    if (proc == 0) {
-        DEBUGLOG("failed to find our_task_addr!");
-        exit(EXIT_FAILURE);
-    }
-
+    uint64_t proc = proc_find(getpid());
     return rk64(proc + offsetof_task);
 }
 
@@ -151,7 +134,7 @@ uint64_t get_exception_osarray(void) {
 static const char *exc_key = "com.apple.security.exception.files.absolute-path.read-only";
 
 void set_sandbox_extensions(uint64_t proc) {
-    uint64_t proc_ucred = rk64(proc + 0x100);
+    uint64_t proc_ucred = rk64(proc + offsetof_p_ucred);
     uint64_t sandbox = rk64(rk64(proc_ucred + 0x78) + 0x8 + 0x8);
     
     if (sandbox == 0) {
@@ -180,7 +163,7 @@ void set_sandbox_extensions(uint64_t proc) {
 }
 
 void set_amfi_entitlements(uint64_t proc) {
-    uint64_t proc_ucred = rk64(proc + 0x100);
+    uint64_t proc_ucred = rk64(proc + offsetof_p_ucred);
     uint64_t amfi_entitlements = rk64(rk64(proc_ucred + 0x78) + 0x8);
 
     int rv = 0;
@@ -225,7 +208,7 @@ void set_amfi_entitlements(uint64_t proc) {
 }
 
 void fixup_tfplatform(uint64_t proc) {
-    uint64_t proc_ucred = rk64(proc + 0x100);
+    uint64_t proc_ucred = rk64(proc + offsetof_p_ucred);
     uint64_t amfi_entitlements = rk64(rk64(proc_ucred + 0x78) + 0x8);
 
     uint64_t key = OSDictionary_GetItem(amfi_entitlements, "platform-application");
@@ -253,7 +236,7 @@ void fixup_cs_valid(uint64_t proc) {
     wk32(proc + offsetof_p_csflags, csflags);
 }
 
-void fixup(int pid) {
+void fixup(pid_t pid) {
     uint64_t proc = proc_find(pid);
     if (proc == 0) {
         DEBUGLOG("failed to find proc for pid %d!", pid);

@@ -103,9 +103,8 @@ extern mach_port_t tfp0;
 extern uint64_t kernel_base;
 extern uint64_t kernel_slide;
 
-extern uint64_t kernprocaddr;
+extern uint64_t offset_kernel_task;
 extern uint64_t offset_zonemap;
-
 extern uint64_t offset_add_ret_gadget;
 extern uint64_t offset_osboolean_true;
 extern uint64_t offset_osboolean_false;
@@ -114,11 +113,11 @@ extern uint64_t offset_smalloc;
 
 uint64_t find_port(mach_port_name_t port);
 
-uint64_t proc_find(int pid);
+uint64_t proc_find(pid_t pid);
 
 void platformize(uint64_t proc);
-void fixup(int pid);
-void fixup_setuid(int pid, uint64_t proc);
+void fixup(pid_t pid);
+void fixup_setuid(pid_t pid, uint64_t proc);
 void fixup_sandbox(uint64_t proc);
 void fixup_cs_valid(uint64_t proc);
 
