@@ -11,15 +11,6 @@ FILE *log_file = NULL;
 #define CS_OPS_STATUS           0       /* return status */
 int csops(pid_t pid, unsigned int  ops, void * useraddr, size_t usersize);
 
-#define PROC_PIDPATHINFO_MAXSIZE  (4 * MAXPATHLEN)
-
-#define JAILBREAKD_COMMAND_ENTITLE 1
-#define JAILBREAKD_COMMAND_ENTITLE_AND_SIGCONT 2
-#define JAILBREAKD_COMMAND_ENTITLE_AND_SIGCONT_FROM_XPCPROXY 3
-#define JAILBREAKD_COMMAND_FIXUP_SETUID 4
-
-#define FLAG_PLATFORMIZE (1 << 1)
-
 const char *blacklist[] = {
     "diagnosticd",    // syslog
     "logd",       // logd - things that log when this is starting end badly so...
