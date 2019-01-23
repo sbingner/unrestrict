@@ -142,19 +142,16 @@ void set_sandbox_extensions(uint64_t proc) {
         return;
     }
 
-    if (has_file_extension(sandbox, abs_path_exceptions[0])) {
-        DEBUGLOG("already has '%s', skipping", abs_path_exceptions[0]);
-        return;
-    }
-
     uint64_t ext = 0;
-    const char** path = abs_path_exceptions;
-    while (*path != NULL) {
-        ext = extension_create_file(*path, ext);
-        if (ext == 0) {
-            DEBUGLOG("extension_create_file(%s) failed, panic!", *path);
+    for (const char **exception = abs_path_exceptions; *exception; exception++) {
+        if (has_file_extension(sandbox, *exception)) {
+            DEBUGLOG("already has '%s', skipping", *exception);
+            continue;
         }
-        ++path;
+        ext = extension_create_file(*exception, ext);
+        if (ext == 0) {
+            DEBUGLOG("extension_create_file(%s) failed, panic!", *exception);
+        }
     }
     
     if (ext != 0) {
