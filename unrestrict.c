@@ -49,14 +49,15 @@ bool MSrevalidate0(mach_port_t task) {
     if (csops(pid, CS_OPS_STATUS, &status, sizeof(status)) < 0)
         return true;
 
-    uint64_t proc = proc_find(pid);
-    if (proc == 0) {
-        DEBUGLOG("failed to find proc for pid %d!", pid);
-        return true;
-    }
-
-    if ((status & CS_VALID) == 0)
+    if ((status & CS_VALID) == 0) {
+        uint64_t proc = proc_find(pid);
+        if (proc == 0) {
+            DEBUGLOG("failed to find proc for pid %d!", pid);
+            return true;
+        }
+        
         fixup_cs_valid(proc);
+    }
 
     return true;
 }
