@@ -43,7 +43,7 @@ int OSDictionary_SetItem(uint64_t dict, const char *key, uint64_t val) {
 // to vtable addr saved before
 
 // address if exists, 0 if not
-int _OSDictionary_GetItem(uint64_t dict, const char *key) {
+uint64_t _OSDictionary_GetItem(uint64_t dict, const char *key) {
     size_t len = strlen(key) + 1;
 
     uint64_t ks = kalloc(len);
@@ -52,7 +52,7 @@ int _OSDictionary_GetItem(uint64_t dict, const char *key) {
     uint64_t vtab = rk64(dict);
     uint64_t f = rk64(vtab + off_OSDictionary_GetObjectWithCharP);
 
-    int rv = (int) kexecute(f, dict, ks, 0, 0, 0, 0, 0);
+    uint64_t rv = kexecute(f, dict, ks, 0, 0, 0, 0, 0);
 
     kfree(ks, len);
 
@@ -62,7 +62,7 @@ int _OSDictionary_GetItem(uint64_t dict, const char *key) {
 uint64_t OSDictionary_GetItem(uint64_t dict, const char *key) {
     uint64_t ret = _OSDictionary_GetItem(dict, key);
     
-    if (ret != 0) {
+    if (ret != 0 && (ret>>8) == 0) {
         // XXX can it be not in zalloc?..
         ret = zm_fix_addr(ret);
     }
