@@ -12,7 +12,6 @@ FILE *log_file = NULL;
 int csops(pid_t pid, unsigned int  ops, void * useraddr, size_t usersize);
 
 bool MSunrestrict0(mach_port_t task) {
-    bool do_sandbox = false;
     char pathbuf[PROC_PIDPATHINFO_MAXSIZE];
     bzero(pathbuf, sizeof(pathbuf));
 
