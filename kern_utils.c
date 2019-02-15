@@ -165,6 +165,17 @@ void set_amfi_entitlements(uint64_t proc) {
 
     int rv = 0;
     
+    if (kCFCoreFoundationVersionNumber >= 1535.12) {
+        uint64_t key = OSDictionary_GetItem(amfi_entitlements, "com.apple.private.security.no-sandbox");
+        if (key != offset_osboolean_true) {
+            rv = OSDictionary_SetItem(amfi_entitlements, "com.apple.private.security.no-sandbox", offset_osboolean_true);
+            if (rv != 1) {
+                DEBUGLOG("failed to set com.apple.private.security.no-sandbox within amfi_entitlements!");
+            }
+        }
+        return;
+    }
+    
     uint64_t present = OSDictionary_GetItem(amfi_entitlements, exc_key);
 
     if (present == 0) {
@@ -222,6 +233,9 @@ void fixup_tfplatform(uint64_t proc) {
 }
 
 void fixup_sandbox(uint64_t proc) {
+    if (kCFCoreFoundationVersionNumber >= 1535.12) {
+        return;
+    }
     set_sandbox_extensions(proc);
 }
 
