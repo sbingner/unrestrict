@@ -165,8 +165,18 @@ void set_amfi_entitlements(uint64_t proc) {
 
     int rv = 0;
     
+    uint64_t key = 0;
+    
+    key = OSDictionary_GetItem(amfi_entitlements, "com.apple.private.skip-library-validation");
+    if (key != offset_osboolean_true) {
+        rv = OSDictionary_SetItem(amfi_entitlements, "com.apple.private.skip-library-validation", offset_osboolean_true);
+        if (rv != 1) {
+            DEBUGLOG("failed to set com.apple.private.skip-library-validation!");
+        }
+    }
+    
     if (kCFCoreFoundationVersionNumber >= 1535.12) {
-        uint64_t key = OSDictionary_GetItem(amfi_entitlements, "com.apple.private.security.no-sandbox");
+        key = OSDictionary_GetItem(amfi_entitlements, "com.apple.private.security.no-sandbox");
         if (key != offset_osboolean_true) {
             rv = OSDictionary_SetItem(amfi_entitlements, "com.apple.private.security.no-sandbox", offset_osboolean_true);
             if (rv != 1) {
