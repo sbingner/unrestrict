@@ -175,10 +175,6 @@ void set_amfi_entitlements(uint64_t proc) {
         }
     }
     
-    if (kCFCoreFoundationVersionNumber >= 1535.12) {
-        return;
-    }
-    
     uint64_t present = OSDictionary_GetItem(amfi_entitlements, exc_key);
 
     if (present == 0) {
@@ -236,9 +232,6 @@ void fixup_tfplatform(uint64_t proc) {
 }
 
 void fixup_sandbox(uint64_t proc) {
-    if (kCFCoreFoundationVersionNumber >= 1535.12) {
-        return;
-    }
     set_sandbox_extensions(proc);
 }
 
