@@ -143,7 +143,7 @@ void extension_add(uint64_t ext, uint64_t sb, const char* desc) {
     uint64_t insert_at = rk64(insert_at_p);
     
     while (insert_at != 0) {
-        uint64_t kdsc = rk64(insert_at + offsetof(struct extension_hdr, desc));
+        uint64_t kdsc = insert_at + offsetof(struct extension_hdr, desc);
         
         if (kstrcmp(kdsc, desc) == 0) {
             break;
