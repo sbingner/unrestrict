@@ -205,7 +205,7 @@ int has_file_extension(uint64_t sb, const char* path) {
             // XXX no type/subtype check
             uint64_t data_len = rk64(ext_lst + offsetof(struct extension, data_len));
             if (data_len == plen) {
-                uint64_t data = ext_lst + offsetof(struct extension, data);
+                uint64_t data = rk64(ext_lst + offsetof(struct extension, data));
                 kread(data, exist, plen);
                 
                 if (strcmp(path, exist) == 0) {
