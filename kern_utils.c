@@ -176,11 +176,11 @@ void set_amfi_entitlements(uint64_t proc) {
     }
     
     if (kCFCoreFoundationVersionNumber >= 1535.12) {
-        key = OSDictionary_GetItem(amfi_entitlements, "com.apple.private.security.no-sandbox");
+        key = OSDictionary_GetItem(amfi_entitlements, "com.apple.private.security.no-container");
         if (key != offset_osboolean_true) {
-            rv = OSDictionary_SetItem(amfi_entitlements, "com.apple.private.security.no-sandbox", offset_osboolean_true);
+            rv = OSDictionary_SetItem(amfi_entitlements, "com.apple.private.security.no-container", offset_osboolean_true);
             if (rv != 1) {
-                DEBUGLOG("failed to set com.apple.private.security.no-sandbox within amfi_entitlements!");
+                DEBUGLOG("failed to set com.apple.private.security.no-container within amfi_entitlements!");
             }
         }
         return;
