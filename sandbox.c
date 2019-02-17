@@ -9,23 +9,26 @@ typedef uint64_t extension_t;
 
 struct extension_hdr {
     /* 0x00 */    extension_hdr_t next;
-    /* 0x08 */    uint64_t desc;
-    /* 0x10 */    extension_t ext_lst;
+    /* 0x8 */     extension_t ext_lst;
+    /* 0x10 */    char desc[];
     /* 0x18 */
 };
 
 struct extension {
-    /* 0x00 */    extension_t next;
-    /* 0x08 */    uint64_t desc; // always 0xffffffffffffffff
-    /* 0x10 */    uint64_t ext_lst; // zero, since it's extension and not a header
-    /* 0x18 */    uint8_t something[32]; // zeroed from what I've seen
-    /* 0x38 */    uint32_t type; // see ext_type enum
-    /* 0x3c */    uint32_t subtype; // either 0 or 4 (or whatever unhex gave?..)
-    /* 0x40 */    uint64_t data; // a c string, meaning depends on type and hdr which had this extension
-    /* 0x48 */    uint64_t data_len; // strlen(data)
-    /* 0x50 */    uint64_t unk0; // always 0
-    /* 0x58 */    uint64_t unk1; // always 0xdeadbeefdeadbeef
-    /* 0x60 */
+    extension_t next;
+    uint64_t desc;              // always 0xffffffffffffffff;
+    uint8_t something[20];      // all zero
+    uint16_t num;               // one
+    uint8_t type;               // see ext_type enum
+    uint8_t num3;               // one
+    uint32_t subtype;           // either 0 or 4 (or whatever unhex gave?..)
+    uint32_t num4;              // another number
+    void* data;                 // a c string, meaning depends on type and hdr which had this extension
+    uint64_t data_len;          // strlen(data)
+    uint16_t num5;              // another one!
+    uint8_t something_2[14];    // something v2.0
+    uint64_t ptr3;              // it's always 0 for files
+    uint64_t ptr4;              // idk
 };
 
 uint64_t _smalloc(uint64_t size) {
@@ -69,11 +72,17 @@ uint64_t extension_create_file(const char* path, uint64_t nextptr) {
     if (ext_p && ks) {
         struct extension ext;
         bzero(&ext, sizeof(ext));
-        ext.next = nextptr;
+        ext.next = (extension_t)nextptr;
         ext.desc = 0xffffffffffffffff;
         
-        ext.data = ks;
+        ext.type = ET_FILE;
+        ext.subtype = 0;
+        
+        ext.data = (void*)ks;
         ext.data_len = slen;
+        
+        ext.num = 1;
+        ext.num3 = 1;
         
         kwrite(ext_p, &ext, sizeof(ext));
     } else {
@@ -83,58 +92,27 @@ uint64_t extension_create_file(const char* path, uint64_t nextptr) {
     return ext_p;
 }
 
-// get 64 higher bits of 64bit int multiplication
-// https://stackoverflow.com/a/28904636
-// ofc in asm it's done with 1 instruction huh
-// XXX there has to be a cleaner way utilizing hardware support
-uint64_t mulhi(uint64_t a, uint64_t b) {
-    uint64_t    a_lo = (uint32_t)a;
-    uint64_t    a_hi = a >> 32;
-    uint64_t    b_lo = (uint32_t)b;
-    uint64_t    b_hi = b >> 32;
-    
-    uint64_t    a_x_b_hi =  a_hi * b_hi;
-    uint64_t    a_x_b_mid = a_hi * b_lo;
-    uint64_t    b_x_a_mid = b_hi * a_lo;
-    uint64_t    a_x_b_lo =  a_lo * b_lo;
-    
-    uint64_t    carry_bit = ((uint64_t)(uint32_t)a_x_b_mid +
-                             (uint64_t)(uint32_t)b_x_a_mid +
-                             (a_x_b_lo >> 32) ) >> 32;
-    
-    uint64_t    multhi = a_x_b_hi +
-    (a_x_b_mid >> 32) + (b_x_a_mid >> 32) +
-    carry_bit;
-    
-    return multhi;
-}
-
 int hashing_magic(const char *desc) {
-    // inlined into exception_add
-    uint64_t hashed = 0x1505;
+    unsigned int hashed;
+    char ch, ch2;
+    char *chp;
     
-    // if desc == NULL, then returned value would be 8
-    // APPL optimizes it for some reason
-    // but meh, desc should never be NULL or you get
-    // null dereference in exception_add
-    // if (desc == NULL) return 8;
+    ch = *desc;
     
-    if (desc != NULL) {
-        for (const char* dp = desc; *dp != '\0'; ++dp) {
-            hashed += hashed << 5;
-            hashed += (int64_t) *dp;
+    if (*desc) {
+        chp = (char *)(desc + 1);
+        hashed = 0x1505;
+        
+        do {
+            hashed = 33 * hashed + ch;
+            ch2 = *chp++;
+            ch = ch2;
         }
+        while (ch2);
     }
+    else hashed = 0x1505;
     
-    uint64_t magic = 0xe38e38e38e38e38f;
-    
-    uint64_t hi = mulhi(hashed, magic);
-    hi >>= 3;
-    hi = (hi<<3) + hi;
-    
-    hashed -= hi;
-    
-    return hashed;
+    return hashed % 9;
 }
 
 static const char *ent_key = "com.apple.security.exception.files.absolute-path.read-only";
@@ -142,19 +120,15 @@ static const char *ent_key = "com.apple.security.exception.files.absolute-path.r
 uint64_t make_ext_hdr(const char* key, uint64_t ext_lst) {
     struct extension_hdr hdr;
     
-    uint64_t khdr = smalloc(sizeof(hdr));
+    uint64_t khdr = smalloc(sizeof(hdr) + strlen(key) + 1);
     
     if (khdr) {
         // we add headers to end
         hdr.next = 0;
-        hdr.desc = sstrdup(key);
-        if (hdr.desc == 0) {
-            // XXX leak
-            return 0;
-        }
-        
         hdr.ext_lst = ext_lst;
+        
         kwrite(khdr, &hdr, sizeof(hdr));
+        kwrite(khdr + offsetof(struct extension_hdr, desc), key, strlen(key) + 1);
     }
     
     return khdr;
@@ -164,7 +138,8 @@ void extension_add(uint64_t ext, uint64_t sb, const char* desc) {
     // XXX patchfinder + kexecute would be way better
     
     int slot = hashing_magic(ent_key);
-    uint64_t insert_at_p = sb + sizeof(void*) + slot * sizeof(void*);
+    uint64_t ext_table = rk64(sb + sizeof(void *));
+    uint64_t insert_at_p = ext_table + slot * sizeof(void*);
     uint64_t insert_at = rk64(insert_at_p);
     
     while (insert_at != 0) {
@@ -204,11 +179,12 @@ int has_file_extension(uint64_t sb, const char* path) {
     int found = 0;
     
     int slot = hashing_magic(ent_key);
-    uint64_t insert_at_p = sb + sizeof(void*) + slot * sizeof(void*);
+    uint64_t ext_table = rk64(sb + sizeof(void *));
+    uint64_t insert_at_p = ext_table + slot * sizeof(void*);
     uint64_t insert_at = rk64(insert_at_p);
     
     while (insert_at != 0) {
-        uint64_t kdsc = rk64(insert_at + offsetof(struct extension_hdr, desc));
+        uint64_t kdsc = insert_at + offsetof(struct extension_hdr, desc);
         
         if (kstrcmp(kdsc, desc) == 0) {
             break;
@@ -229,7 +205,7 @@ int has_file_extension(uint64_t sb, const char* path) {
             // XXX no type/subtype check
             uint64_t data_len = rk64(ext_lst + offsetof(struct extension, data_len));
             if (data_len == plen) {
-                uint64_t data = rk64(ext_lst + offsetof(struct extension, data));
+                uint64_t data = ext_lst + offsetof(struct extension, data);
                 kread(data, exist, plen);
                 
                 if (strcmp(path, exist) == 0) {
