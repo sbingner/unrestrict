@@ -62,7 +62,7 @@ uint64_t _OSDictionary_GetItem(uint64_t dict, const char *key) {
 uint64_t OSDictionary_GetItem(uint64_t dict, const char *key) {
     uint64_t ret = _OSDictionary_GetItem(dict, key);
     
-    if (ret != 0 && (ret>>8) == 0) {
+    if (ret != 0 && (ret>>32) == 0) {
         // XXX can it be not in zalloc?..
         ret = zm_fix_addr(ret);
     }
