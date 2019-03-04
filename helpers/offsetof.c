@@ -15,4 +15,4 @@
 #define offsetof_ucred_cr_groups (unsigned)(0x28)  // ucred::cr_groups
 #define offsetof_ucred_cr_svgid (unsigned)(0x6c)   // ucred::cr_svgid
 
-#define offsetof_t_flags (unsigned)(0x3a0) // task::t_flags
+#define offsetof_t_flags (unsigned)((kCFCoreFoundationVersionNumber >= 1535.12) ? (0x390) : (0x3a0)) // task::t_flags

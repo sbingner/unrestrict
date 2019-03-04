@@ -107,8 +107,10 @@ void set_tfplatform(uint64_t proc) {
     // task.t_flags & TF_PLATFORM
     uint64_t task = rk64(proc + offsetof_task);
     uint32_t t_flags = rk32(task + offsetof_t_flags);
-    t_flags |= TF_PLATFORM;
-    wk32(task+offsetof_t_flags, t_flags);
+    if (!(t_flags&TF_PLATFORM)) {
+        t_flags |= TF_PLATFORM;
+        wk32(task+offsetof_t_flags, t_flags);
+    }
 }
 
 const char* abs_path_exceptions[] = {
@@ -224,8 +226,10 @@ void fixup_tfplatform(uint64_t proc) {
         set_tfplatform(proc);
 
         uint32_t csflags = rk32(proc + offsetof_p_csflags);
-        csflags |= CS_PLATFORM_BINARY;
-        wk32(proc + offsetof_p_csflags, csflags);
+        if (!(csflags&CS_PLATFORM_BINARY)) {
+            csflags |= CS_PLATFORM_BINARY;
+            wk32(proc + offsetof_p_csflags, csflags);
+        }
     } else {
         DEBUGLOG("platform-application is not set");
     }
