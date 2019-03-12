@@ -22,8 +22,21 @@ uint64_t offset_osboolean_false;
 uint64_t offset_osunserializexml;
 uint64_t offset_smalloc;
 
-uint64_t proc_find(int pid) {
-    uint64_t proc = rk64(rk64(offset_kernel_task) + offsetof_bsd_info);
+uint64_t proc_find(pid_t pid) {
+    static uint64_t kernproc = 0;
+    if (kernproc == 0) {
+        kernproc = rk64(rk64(offset_kernel_task) + offsetof_bsd_info);
+        if (kernproc == 0) {
+            DEBUGLOG("failed to find kernproc!");
+            return 0;
+        }
+    }
+    
+    uint64_t proc = kernproc;
+    
+    if (pid == 0) {
+        return proc;
+    }
     
     while (proc) {
         uint32_t found_pid = rk32(proc + offsetof_p_pid);
@@ -40,20 +53,46 @@ uint64_t proc_find(int pid) {
 
 CACHED_FIND(uint64_t, our_task_addr) {
     uint64_t proc = proc_find(getpid());
-    return rk64(proc + offsetof_task);
+    if (proc == 0) {
+        DEBUGLOG("failed to get proc!");
+        return 0;
+    }
+    uint64_t task_addr = rk64(proc + offsetof_task);
+    if (task_addr == 0) {
+        DEBUGLOG("failed to get task_addr!");
+        return 0;
+    }
+    return task_addr;
 }
 
 uint64_t find_port(mach_port_name_t port) {
-    uint64_t task_addr = our_task_addr();
-  
-    uint64_t itk_space = rk64(task_addr + offsetof_itk_space);
-  
-    uint64_t is_table = rk64(itk_space + offsetof_ipc_space_is_table);
+    static uint64_t is_table = 0;
+    if (is_table == 0) {
+        uint64_t task_addr = our_task_addr();
+        if (task_addr) {
+            DEBUGLOG("failed to get task_addr!");
+            return 0;
+        }
+        uint64_t itk_space = rk64(task_addr + offsetof_itk_space);
+        if (itk_space == 0) {
+            DEBUGLOG("failed to get itk_space!");
+            return 0;
+        }
+        is_table = rk64(itk_space + offsetof_ipc_space_is_table);
+        if (is_table) {
+            DEBUGLOG("failed to get is_table!");
+            return 0;
+        }
+    }
   
     uint32_t port_index = port >> 8;
     const int sizeof_ipc_entry_t = 0x18;
-  
-    return rk64(is_table + (port_index * sizeof_ipc_entry_t));
+    uint64_t port_addr = rk64(is_table + (port_index * sizeof_ipc_entry_t));
+    if (port_addr == 0) {
+        DEBUGLOG("failed to get port_addr!");
+        return 0;
+    }
+    return port_addr;
 }
 
 void fixup_setuid(int pid, uint64_t proc) {
