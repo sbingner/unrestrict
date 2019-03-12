@@ -155,6 +155,7 @@ void set_tfplatform(uint64_t proc) {
 const char* abs_path_exceptions[] = {
     "/Library",
     "/private/var/mobile/Library",
+    "/System/Library/Caches",
     NULL
 };
 
@@ -165,6 +166,7 @@ uint64_t get_exception_osarray(void) {
             "<array>"
             "<string>/Library/</string>"
             "<string>/private/var/mobile/Library/</string>"
+            "<string>/System/Library/Caches/</string>"
             "</array>"
         );
     }
