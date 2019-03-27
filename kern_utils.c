@@ -206,14 +206,14 @@ void set_amfi_entitlements(uint64_t proc) {
     uint64_t proc_ucred = rk64(proc + offsetof_p_ucred);
     uint64_t amfi_entitlements = rk64(rk64(proc_ucred + 0x78) + 0x8);
 
-    int rv = 0;
+    bool rv = 0;
     
     uint64_t key = 0;
     
     key = OSDictionary_GetItem(amfi_entitlements, "com.apple.private.skip-library-validation");
     if (key != offset_osboolean_true) {
         rv = OSDictionary_SetItem(amfi_entitlements, "com.apple.private.skip-library-validation", offset_osboolean_true);
-        if (rv != 1) {
+        if (rv != true) {
             DEBUGLOG("failed to set com.apple.private.skip-library-validation!");
         }
     }
@@ -223,6 +223,9 @@ void set_amfi_entitlements(uint64_t proc) {
     if (present == 0) {
         DEBUGLOG("present=0; setting to %llx", get_exception_osarray());
         rv = OSDictionary_SetItem(amfi_entitlements, exc_key, get_exception_osarray());
+        if (rv != true) {
+            DEBUGLOG("failed to set %s", exc_key);
+        }
     } else if (present != get_exception_osarray()) {
         unsigned int itemCount = OSArray_ItemCount(present);
         DEBUGLOG("got item count: %d", itemCount);
@@ -246,13 +249,13 @@ void set_amfi_entitlements(uint64_t proc) {
         if (!foundEntitlements) {
             rv = OSArray_Merge(present, get_exception_osarray());
         } else {
-            rv = 1;
+            rv = true;
         }
     } else {
-        rv = 1;
+        rv = true;
     }
 
-    if (rv != 1) {
+    if (rv != true) {
         DEBUGLOG("Setting exc FAILED! amfi_entitlements: 0x%llx present: 0x%llx", amfi_entitlements, present);
     }
 }

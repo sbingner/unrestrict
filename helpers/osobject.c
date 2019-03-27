@@ -22,7 +22,7 @@ static uint32_t off_OSObject_Retain                 = sizeof(void*) * 0x04;
 static uint32_t off_OSString_GetLength              = sizeof(void*) * 0x11;
 
 // 1 on success, 0 on error
-int OSDictionary_SetItem(uint64_t dict, const char *key, uint64_t val) {
+bool OSDictionary_SetItem(uint64_t dict, const char *key, uint64_t val) {
     size_t len = strlen(key) + 1;
 
     uint64_t ks = kalloc(len);
@@ -71,7 +71,7 @@ uint64_t OSDictionary_GetItem(uint64_t dict, const char *key) {
 }
 
 // 1 on success, 0 on error
-int OSDictionary_Merge(uint64_t dict, uint64_t aDict) {
+bool OSDictionary_Merge(uint64_t dict, uint64_t aDict) {
     uint64_t vtab = rk64(dict);
     uint64_t f = rk64(vtab + off_OSDictionary_Merge);
 
@@ -79,7 +79,7 @@ int OSDictionary_Merge(uint64_t dict, uint64_t aDict) {
 }
 
 // 1 on success, 0 on error
-int OSArray_Merge(uint64_t array, uint64_t aArray) {
+bool OSArray_Merge(uint64_t array, uint64_t aArray) {
     uint64_t vtab = rk64(array);
     uint64_t f = rk64(vtab + off_OSArray_Merge);
 
