@@ -239,6 +239,14 @@ void set_amfi_entitlements(uint64_t proc) {
         }
     }
     
+    key = OSDictionary_GetItem(amfi_entitlements, "get-task-allow");
+    if (key != offset_osboolean_true) {
+        rv = OSDictionary_SetItem(amfi_entitlements, "get-task-allow", offset_osboolean_true);
+        if (rv != 1) {
+            DEBUGLOG("failed to set get-task-allow!");
+        }
+    }
+    
     uint64_t present = OSDictionary_GetItem(amfi_entitlements, exc_key);
 
     if (present == 0) {
@@ -312,6 +320,14 @@ void fixup_cs_valid(uint64_t proc) {
     set_csflags(proc, CS_VALID, true);
 }
 
+void fixup_cs_flags(uint64_t proc) {
+    uint32_t csflags = rk32(proc + offsetof_p_csflags);
+
+    csflags |= (CS_VALID | CS_GET_TASK_ALLOW);
+    
+    wk32(proc + offsetof_p_csflags, csflags);
+}
+
 void fixup(pid_t pid) {
     uint64_t proc = proc_find(pid);
     if (proc == 0) {
@@ -325,8 +341,11 @@ void fixup(pid_t pid) {
     fixup_sandbox(proc);
     DEBUGLOG("fixup_tfplatform");
     fixup_tfplatform(proc);
+    DEBUGLOG("fixup_cs_flags");
+    fixup_cs_flags(proc);
     DEBUGLOG("set_amfi_entitlements");
     set_amfi_entitlements(proc);
+    
 }
 
 void kern_utils_cleanup() {
