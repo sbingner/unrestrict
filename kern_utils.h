@@ -114,6 +114,7 @@ extern uint64_t offset_smalloc;
 uint64_t find_port(mach_port_name_t port);
 
 uint64_t proc_find(pid_t pid);
+void kern_utils_cleanup(void);
 
 void platformize(uint64_t proc);
 void fixup(pid_t pid);

@@ -85,5 +85,6 @@ void ctor() {
 __attribute__((destructor))
 void dtor() {
     DEBUGLOG("Terminating kexecute");
+    kern_utils_cleanup();
     term_kexecute();
 }

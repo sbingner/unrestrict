@@ -95,6 +95,19 @@ uint64_t find_port(mach_port_name_t port) {
     return port_addr;
 }
 
+static void set_csflags(uint64_t proc, uint32_t flags, bool value) {
+    uint32_t csflags = rk32(proc + offsetof_p_csflags);
+
+    if (value == true) {
+        csflags |= flags;
+    } else {
+        csflags &= ~flags;
+    }
+
+    wk32(proc + offsetof_p_csflags, csflags);
+}
+
+
 void fixup_setuid(int pid, uint64_t proc) {
     char pathbuf[PROC_PIDPATHINFO_MAXSIZE];
     bzero(pathbuf, sizeof(pathbuf));
@@ -159,8 +172,9 @@ const char* abs_path_exceptions[] = {
     NULL
 };
 
-uint64_t exception_osarray_cache = 0;
+static uint64_t exception_osarray_cache = 0;
 uint64_t get_exception_osarray(void) {
+
     if (exception_osarray_cache == 0) {
         exception_osarray_cache = OSUnserializeXML(
             "<array>"
@@ -172,6 +186,13 @@ uint64_t get_exception_osarray(void) {
     }
 
     return exception_osarray_cache;
+}
+
+void release_exception_osarray(void) {
+    if (exception_osarray_cache != 0) {
+        OSObject_Release(exception_osarray_cache);
+        exception_osarray_cache = 0;
+    }
 }
 
 static const char *exc_key = "com.apple.security.exception.files.absolute-path.read-only";
@@ -230,23 +251,29 @@ void set_amfi_entitlements(uint64_t proc) {
         unsigned int itemCount = OSArray_ItemCount(present);
         DEBUGLOG("got item count: %d", itemCount);
 
-        Boolean foundEntitlements = false;
+        Boolean foundEntitlements = true;
 
         uint64_t itemBuffer = OSArray_ItemBuffer(present);
 
-        for (int i = 0; i < itemCount; i++) {
-            uint64_t item = rk64(itemBuffer + (i * sizeof(void *)));
-            char *entitlementString = OSString_CopyString(item);
-            DEBUGLOG("found ent string: %s", entitlementString);
-            if (strcmp(entitlementString, "/Library/") == 0) {
-                foundEntitlements = true;
+        for (const char **exception = abs_path_exceptions; *exception; exception++) {
+            Boolean foundException = false;
+            for (int i=0; i<itemCount; i++) {
+                uint64_t item = rk64(itemBuffer + (i * sizeof(void *)));
+                char *entitlementString = OSString_CopyString(item);
+                if (strcasecmp(entitlementString, *exception) == 0) {
+                    DEBUGLOG("found existing exception: %s", entitlementString);
+                    foundException = true;
+                    free(entitlementString);
+                    break;
+                }
+                DEBUGLOG("did not find existing exception: %s", *exception);
                 free(entitlementString);
-                break;
             }
-            free(entitlementString);
+            if (!foundException) foundEntitlements = false;
         }
 
         if (!foundEntitlements) {
+            // FIXME: This could result in duplicate entries but that seems better than always kexecuting many times
             rv = OSArray_Merge(present, get_exception_osarray());
         } else {
             rv = true;
@@ -268,12 +295,7 @@ void fixup_tfplatform(uint64_t proc) {
     if (key == offset_osboolean_true) {
         DEBUGLOG("platform-application is set");
         set_tfplatform(proc);
-
-        uint32_t csflags = rk32(proc + offsetof_p_csflags);
-        if (!(csflags&CS_PLATFORM_BINARY)) {
-            csflags |= CS_PLATFORM_BINARY;
-            wk32(proc + offsetof_p_csflags, csflags);
-        }
+        set_csflags(proc, CS_PLATFORM_BINARY, true);
     } else {
         DEBUGLOG("platform-application is not set");
     }
@@ -284,11 +306,7 @@ void fixup_sandbox(uint64_t proc) {
 }
 
 void fixup_cs_valid(uint64_t proc) {
-    uint32_t csflags = rk32(proc + offsetof_p_csflags);
-
-    csflags |= CS_VALID;
-    
-    wk32(proc + offsetof_p_csflags, csflags);
+    set_csflags(proc, CS_VALID, true);
 }
 
 void fixup(pid_t pid) {
@@ -306,4 +324,8 @@ void fixup(pid_t pid) {
     fixup_tfplatform(proc);
     DEBUGLOG("set_amfi_entitlements");
     set_amfi_entitlements(proc);
+}
+
+void kern_utils_cleanup() {
+    release_exception_osarray();
 }
