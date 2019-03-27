@@ -144,13 +144,13 @@ void OSObject_Release(uint64_t osobject) {
 
 void OSObject_Retain(uint64_t osobject) {
     uint64_t vtab = rk64(osobject);
-    uint64_t f = rk64(vtab + off_OSObject_Release);
+    uint64_t f = rk64(vtab + off_OSObject_Retain);
     (void) kexecute(f, osobject, 0, 0, 0, 0, 0, 0);
 }
 
 uint32_t OSObject_GetRetainCount(uint64_t osobject) {
     uint64_t vtab = rk64(osobject);
-    uint64_t f = rk64(vtab + off_OSObject_Release);
+    uint64_t f = rk64(vtab + off_OSObject_GetRetainCount);
     return (uint32_t) kexecute(f, osobject, 0, 0, 0, 0, 0, 0);
 }
 
