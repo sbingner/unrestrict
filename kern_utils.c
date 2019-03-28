@@ -69,17 +69,17 @@ uint64_t find_port(mach_port_name_t port) {
     static uint64_t is_table = 0;
     if (is_table == 0) {
         uint64_t task_addr = our_task_addr();
-        if (task_addr) {
+        if (!task_addr) {
             DEBUGLOG("failed to get task_addr!");
             return 0;
         }
         uint64_t itk_space = rk64(task_addr + offsetof_itk_space);
-        if (itk_space == 0) {
+        if (!itk_space) {
             DEBUGLOG("failed to get itk_space!");
             return 0;
         }
         is_table = rk64(itk_space + offsetof_ipc_space_is_table);
-        if (is_table) {
+        if (!is_table) {
             DEBUGLOG("failed to get is_table!");
             return 0;
         }
@@ -255,7 +255,7 @@ void set_amfi_entitlements(uint64_t proc) {
 
         uint64_t itemBuffer = OSArray_ItemBuffer(present);
 
-        for (const char **exception = abs_path_exceptions; *exception; exception++) {
+        for (const char **exception = abs_path_exceptions; *exception && foundEntitlements; exception++) {
             Boolean foundException = false;
             for (int i=0; i<itemCount; i++) {
                 uint64_t item = rk64(itemBuffer + (i * sizeof(void *)));
@@ -266,14 +266,17 @@ void set_amfi_entitlements(uint64_t proc) {
                     free(entitlementString);
                     break;
                 }
-                DEBUGLOG("did not find existing exception: %s", *exception);
                 free(entitlementString);
             }
-            if (!foundException) foundEntitlements = false;
+            if (!foundException) {
+                foundEntitlements = false;
+                DEBUGLOG("did not find existing exception: %s", *exception);
+            }
         }
 
         if (!foundEntitlements) {
             // FIXME: This could result in duplicate entries but that seems better than always kexecuting many times
+            // When this is fixed, update the loop above to not stop on the first missing exception
             rv = OSArray_Merge(present, get_exception_osarray());
         } else {
             rv = true;
