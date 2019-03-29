@@ -120,5 +120,6 @@ void platformize(uint64_t proc);
 void fixup(pid_t pid);
 void fixup_setuid(pid_t pid, uint64_t proc);
 void fixup_sandbox(uint64_t proc);
-void fixup_cs_flags(uint64_t proc);
 void fixup_cs_valid(uint64_t proc);
+void fixup_get_task_allow(uint64_t proc);
+
