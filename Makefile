@@ -3,7 +3,7 @@ OUTDIR ?= bin
 DSYMDIR ?= dsym
 PREFIX ?= /Library/MobileSubstrate/ServerPlugins
 ARCHS  ?= arm64
-SRC     = $(wildcard *.c helpers/*.c)
+SRC     = $(wildcard *.c helpers/*.c offset-cache/*.c)
 OBJ	= $(SRC:.c=.o)
 
 CC      = xcrun -sdk iphoneos gcc $(patsubst %,-arch %,$(ARCHS))

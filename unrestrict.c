@@ -12,6 +12,8 @@ FILE *log_file = NULL;
 int csops(pid_t pid, unsigned int  ops, void * useraddr, size_t usersize);
 
 bool MSunrestrict0(mach_port_t task) {
+    if (!initialized) return true;
+
     char pathbuf[PROC_PIDPATHINFO_MAXSIZE];
     bzero(pathbuf, sizeof(pathbuf));
 
@@ -31,6 +33,8 @@ bool MSunrestrict0(mach_port_t task) {
 }
 
 bool MSrevalidate0(mach_port_t task) {
+    if (!initialized) return true;
+
     char pathbuf[PROC_PIDPATHINFO_MAXSIZE];
     bzero(pathbuf, sizeof(pathbuf));
 

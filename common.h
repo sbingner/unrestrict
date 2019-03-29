@@ -1,5 +1,11 @@
+#ifndef _UNRESTRICT_COMMON_H
+#define _UNRESTRICT_COMMON_H
+
 #include <stdio.h>
+#include <stdbool.h>
 #include <sys/time.h>
+
+extern bool initialized;
 
 #ifdef DEBUG
 extern FILE *log_file;
@@ -35,3 +41,5 @@ do {                                                                \
         return cached;                  \
     }                                   \
     type __##name(void)
+
+#endif

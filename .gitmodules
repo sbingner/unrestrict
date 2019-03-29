@@ -1,0 +1,3 @@
+[submodule "offset-cache"]
+	path = offset-cache
+	url = git@github.com:sbingner/offset-cache.git
