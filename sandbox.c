@@ -216,15 +216,17 @@ uint64_t make_ext_hdr(const char* key, uint64_t ext_lst) {
         struct extension_hdr12 hdr;
         
         uint64_t khdr = smalloc(sizeof(hdr) + strlen(key) + 1);
-        
-        if (khdr) {
-            // we add headers to end
-            hdr.next = 0;
-            hdr.ext_lst = ext_lst;
-            
-            kwrite(khdr, &hdr, sizeof(hdr));
-            kwrite(khdr + offsetof(struct extension_hdr12, desc), key, strlen(key) + 1);
+        if (!khdr) {
+            CROAK("Unable to smalloc");
+            return 0;
         }
+        
+        // we add headers to end
+        hdr.next = 0;
+        hdr.ext_lst = ext_lst;
+
+        kwrite(khdr, &hdr, sizeof(hdr));
+        kwrite(khdr + offsetof(struct extension_hdr12, desc), key, strlen(key) + 1);
         
         return khdr;
     } else {
@@ -362,6 +364,9 @@ int has_file_extension(uint64_t sb, const char* path) {
         
         uint64_t plen = strlen(path);
         char *exist = malloc(plen + 1);
+        if (!exist) {
+            CROAK("Unable to malloc");
+        }
         exist[plen] = '\0';
         
         while (ext_lst != 0) {

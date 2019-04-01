@@ -162,7 +162,11 @@ unsigned int OSString_GetLength(uint64_t osstring){
 
 char *OSString_CopyString(uint64_t osstring){
     unsigned int length = OSString_GetLength(osstring);
+    if (length == 0 || length > 0x100) DEBUGLOG("OSString_CopyString: length=%d", length);
     char *str = (char *)malloc(length + 1);
+    if (!str) {
+        DEBUGLOG("malloc failed OSString_CopyString: str=%p", str);
+    }
     str[length] = 0;
     
     kread(OSString_CStringPtr(osstring), str, length);

@@ -117,6 +117,7 @@ uint64_t zm_fix_addr(uint64_t addr) {
 int kstrcmp(uint64_t kstr, const char *str) {
     size_t len = strlen(str) + 1;
     char *local = malloc(len + 1);
+    if (!local) CROAK("Unable to malloc");
     local[len] = '\0';
 
     int ret = 1;

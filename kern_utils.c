@@ -176,13 +176,45 @@ static uint64_t exception_osarray_cache = 0;
 uint64_t get_exception_osarray(void) {
 
     if (exception_osarray_cache == 0) {
-        exception_osarray_cache = OSUnserializeXML(
-            "<array>"
-            "<string>/Library/</string>"
-            "<string>/private/var/mobile/Library/</string>"
-            "<string>/System/Library/Caches/</string>"
-            "</array>"
-        );
+        DEBUGLOG("Generating exception_osarray_cache");
+        size_t xmlsize = 0x1000;
+        size_t len=0;
+        ssize_t written=0;
+        char *ents = malloc(xmlsize);
+        size_t xmlused = sprintf(ents, "<array>");
+        for (const char **exception = abs_path_exceptions; *exception; exception++) {
+            len = strlen(*exception);
+            len += strlen("<string></string>");
+            while (xmlused + len >= xmlsize) {
+                xmlsize += 0x1000;
+                ents = reallocf(ents, xmlsize);
+                if (!ents) {
+                    CROAK("Unable to reallocate memory");
+                    return 0;
+                }
+            }
+            written = sprintf(ents + xmlused, "<string>%s/</string>", *exception);
+            if (written < 0) {
+                CROAK("Couldn't write string");
+                free(ents);
+                return 0;
+            }
+            xmlused += written;
+        }
+        len = strlen("</array>");
+        if (xmlused + len >= xmlsize) {
+            xmlsize += len;
+            ents = reallocf(ents, xmlsize);
+            if (!ents) {
+                return 0;
+                CROAK("Unable to reallocate memory");
+            }
+        }
+        written = sprintf(ents + xmlused, "</array>");
+
+        exception_osarray_cache = OSUnserializeXML(ents);
+        DEBUGLOG("Exceptions stored at 0x%llx: %s", exception_osarray_cache, ents);
+        free(ents);
     }
 
     return exception_osarray_cache;
@@ -223,14 +255,42 @@ void set_sandbox_extensions(uint64_t proc) {
     }
 }
 
+char **copy_amfi_entitlements(uint64_t present) {
+    unsigned int itemCount = OSArray_ItemCount(present);
+    uint64_t itemBuffer = OSArray_ItemBuffer(present);
+    size_t bufferSize = 0x1000;
+    size_t bufferUsed = 0;
+    size_t arraySize = (itemCount+1) * sizeof(char*);
+    char **entitlements = malloc(arraySize + bufferSize);
+    entitlements[itemCount] = NULL;
+
+    for (int i=0; i<itemCount; i++) {
+        uint64_t item = rk64(itemBuffer + (i * sizeof(void *)));
+        char *entitlementString = OSString_CopyString(item);
+        size_t len = strlen(entitlementString) + 1;
+        while (bufferUsed + len > bufferSize) {
+            bufferSize += 0x1000;
+            entitlements = realloc(entitlements, arraySize + bufferSize);
+            if (!entitlements) {
+                CROAK("Unable to reallocate memory");
+                return NULL;
+            }
+        }
+        entitlements[i] = (char*)entitlements + arraySize + bufferUsed;
+        strcpy(entitlements[i], entitlementString);
+        bufferUsed += len;
+    }
+    return entitlements;
+}
+
 void set_amfi_entitlements(uint64_t proc) {
     uint64_t proc_ucred = rk64(proc + offsetof_p_ucred);
     uint64_t amfi_entitlements = rk64(rk64(proc_ucred + 0x78) + 0x8);
 
     bool rv = 0;
-    
+
     uint64_t key = 0;
-    
+
     key = OSDictionary_GetItem(amfi_entitlements, "com.apple.private.skip-library-validation");
     if (key != offset_osboolean_true) {
         rv = OSDictionary_SetItem(amfi_entitlements, "com.apple.private.skip-library-validation", offset_osboolean_true);
@@ -248,37 +308,37 @@ void set_amfi_entitlements(uint64_t proc) {
             DEBUGLOG("failed to set %s", exc_key);
         }
     } else if (present != get_exception_osarray()) {
-        unsigned int itemCount = OSArray_ItemCount(present);
-        DEBUGLOG("got item count: %d", itemCount);
-
+        char **currentExceptions = copy_amfi_entitlements(present);
         Boolean foundEntitlements = true;
 
-        uint64_t itemBuffer = OSArray_ItemBuffer(present);
-
         for (const char **exception = abs_path_exceptions; *exception && foundEntitlements; exception++) {
+            DEBUGLOG("Looking for %s", *exception);
             Boolean foundException = false;
-            for (int i=0; i<itemCount; i++) {
-                uint64_t item = rk64(itemBuffer + (i * sizeof(void *)));
-                char *entitlementString = OSString_CopyString(item);
-                if (strcasecmp(entitlementString, *exception) == 0) {
-                    DEBUGLOG("found existing exception: %s", entitlementString);
+            for (char **entitlementString = currentExceptions; *entitlementString && !foundException; entitlementString++) {
+                char *ent = strdup(*entitlementString);
+                int lastchar = strlen(ent) - 1;
+                if (ent[lastchar] == '/') ent[lastchar] = '\0';
+
+                if (strcasecmp(ent, *exception) == 0) {
+                    DEBUGLOG("found existing exception: %s", *entitlementString);
                     foundException = true;
-                    free(entitlementString);
-                    break;
                 }
-                free(entitlementString);
+                free(ent);
             }
             if (!foundException) {
                 foundEntitlements = false;
-                DEBUGLOG("did not find existing exception: %s", *exception);
+                DEBUGLOG("did not find exception: %s", *exception);
             }
         }
+        free(currentExceptions);
 
         if (!foundEntitlements) {
+            DEBUGLOG("Merging exceptions");
             // FIXME: This could result in duplicate entries but that seems better than always kexecuting many times
             // When this is fixed, update the loop above to not stop on the first missing exception
             rv = OSArray_Merge(present, get_exception_osarray());
         } else {
+            DEBUGLOG("All exceptions present");
             rv = true;
         }
     } else {
