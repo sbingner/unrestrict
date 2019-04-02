@@ -286,8 +286,9 @@ char **copy_amfi_entitlements(uint64_t present) {
 void set_amfi_entitlements(uint64_t proc) {
     uint64_t proc_ucred = rk64(proc + offsetof_p_ucred);
     uint64_t amfi_entitlements = rk64(rk64(proc_ucred + 0x78) + 0x8);
+    uint64_t sandbox = rk64(rk64(proc_ucred + 0x78) + 0x8 + 0x8);
 
-    bool rv = 0;
+    bool rv = false;
 
     uint64_t key = 0;
 
@@ -299,57 +300,66 @@ void set_amfi_entitlements(uint64_t proc) {
         }
     }
     
-    key = OSDictionary_GetItem(amfi_entitlements, "get-task-allow");
-    if (key != offset_osboolean_true) {
-        rv = OSDictionary_SetItem(amfi_entitlements, "get-task-allow", offset_osboolean_true);
-        if (rv != 1) {
-            DEBUGLOG("failed to set get-task-allow!");
+    if (OPT(GET_TASK_ALLOW)) {
+        key = OSDictionary_GetItem(amfi_entitlements, "get-task-allow");
+        if (key != offset_osboolean_true) {
+            rv = OSDictionary_SetItem(amfi_entitlements, "get-task-allow", offset_osboolean_true);
+            if (rv != true) {
+                DEBUGLOG("failed to set get-task-allow!");
+            }
         }
+    }
+
+    if (!sandbox) {
+        DEBUGLOG("Skipping exceptions because no sandbox");
+        return;
     }
 
     uint64_t present = OSDictionary_GetItem(amfi_entitlements, exc_key);
 
     if (present == 0) {
-        DEBUGLOG("present=0; setting to %llx", get_exception_osarray());
+        DEBUGLOG("present=NULL; setting to %llx", get_exception_osarray());
         rv = OSDictionary_SetItem(amfi_entitlements, exc_key, get_exception_osarray());
         if (rv != true) {
             DEBUGLOG("failed to set %s", exc_key);
         }
-    } else if (present != get_exception_osarray()) {
-        char **currentExceptions = copy_amfi_entitlements(present);
-        Boolean foundEntitlements = true;
+        return;
+    } else if (present == get_exception_osarray()) {
+        DEBUGLOG("Exceptions already set to our array");
+        return;
+    }
 
-        for (const char **exception = abs_path_exceptions; *exception && foundEntitlements; exception++) {
-            DEBUGLOG("Looking for %s", *exception);
-            Boolean foundException = false;
-            for (char **entitlementString = currentExceptions; *entitlementString && !foundException; entitlementString++) {
-                char *ent = strdup(*entitlementString);
-                int lastchar = strlen(ent) - 1;
-                if (ent[lastchar] == '/') ent[lastchar] = '\0';
+    char **currentExceptions = copy_amfi_entitlements(present);
+    Boolean foundEntitlements = true;
 
-                if (strcasecmp(ent, *exception) == 0) {
-                    DEBUGLOG("found existing exception: %s", *entitlementString);
-                    foundException = true;
-                }
-                free(ent);
+    for (const char **exception = abs_path_exceptions; *exception && foundEntitlements; exception++) {
+        DEBUGLOG("Looking for %s", *exception);
+        Boolean foundException = false;
+        for (char **entitlementString = currentExceptions; *entitlementString && !foundException; entitlementString++) {
+            char *ent = strdup(*entitlementString);
+            int lastchar = strlen(ent) - 1;
+            if (ent[lastchar] == '/') ent[lastchar] = '\0';
+
+            if (strcasecmp(ent, *exception) == 0) {
+                DEBUGLOG("found existing exception: %s", *entitlementString);
+                foundException = true;
             }
-            if (!foundException) {
-                foundEntitlements = false;
-                DEBUGLOG("did not find exception: %s", *exception);
-            }
+            free(ent);
         }
-        free(currentExceptions);
+        if (!foundException) {
+            foundEntitlements = false;
+            DEBUGLOG("did not find exception: %s", *exception);
+        }
+    }
+    free(currentExceptions);
 
-        if (!foundEntitlements) {
-            DEBUGLOG("Merging exceptions");
-            // FIXME: This could result in duplicate entries but that seems better than always kexecuting many times
-            // When this is fixed, update the loop above to not stop on the first missing exception
-            rv = OSArray_Merge(present, get_exception_osarray());
-        } else {
-            DEBUGLOG("All exceptions present");
-            rv = true;
-        }
+    if (!foundEntitlements) {
+        DEBUGLOG("Merging exceptions");
+        // FIXME: This could result in duplicate entries but that seems better than always kexecuting many times
+        // When this is fixed, update the loop above to not stop on the first missing exception
+        rv = OSArray_Merge(present, get_exception_osarray());
     } else {
+        DEBUGLOG("All exceptions present");
         rv = true;
     }
 
@@ -380,8 +390,19 @@ void fixup_cs_valid(uint64_t proc) {
     set_csflags(proc, CS_VALID, true);
 }
 
-void fixup_get_task_allow(uint64_t proc) {
-    set_csflags(proc, CS_GET_TASK_ALLOW, true);
+void fixup_cs_flags(uint64_t proc) {
+    int flags = 0;
+    if (OPT(GET_TASK_ALLOW)) {
+        DEBUGLOG("adding get-task-allow");
+        flags |= CS_GET_TASK_ALLOW;
+    }
+    if (OPT(CS_DEBUGGED)) {
+        DEBUGLOG("setting CS_DEBUGGED :(");
+        flags |= CS_DEBUGGED;
+    }
+    if (flags) {
+        set_csflags(proc, flags, true);
+    }
 }
 
 void fixup(pid_t pid) {
@@ -397,8 +418,8 @@ void fixup(pid_t pid) {
     fixup_sandbox(proc);
     DEBUGLOG("fixup_tfplatform");
     fixup_tfplatform(proc);
-    DEBUGLOG("fixup_get_task_allow");
-    fixup_get_task_allow(proc);
+    DEBUGLOG("fixup_cs_flags");
+    fixup_cs_flags(proc);
     DEBUGLOG("set_amfi_entitlements");
     set_amfi_entitlements(proc);
 }
