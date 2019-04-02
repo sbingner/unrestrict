@@ -7,6 +7,10 @@
 #include <sys/time.h>
 
 extern bool initialized;
+extern uint64_t offset_options;
+#define OPT(x) (offset_options?((rk64(offset_options) & OPT_ ##x)?true:false):false)
+#define OPT_GET_TASK_ALLOW (1<<0)
+#define OPT_CS_DEBUGGED (1<<1)
 
 extern FILE *log_file;
 struct timeval dl_tv;

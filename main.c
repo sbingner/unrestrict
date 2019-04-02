@@ -13,6 +13,7 @@
 #include "offset-cache/offsetcache.h"
 
 bool initialized = false;
+uint64_t offset_options = 0;
 
 __attribute__((constructor))
 void ctor() {
@@ -37,19 +38,16 @@ void ctor() {
             dyld_info.all_image_info_addr != dyld_info.all_image_info_size + 0xfffffff007004000) {
         kernel_slide = dyld_info.all_image_info_size;
         size_t blob_size = rk64(dyld_info.all_image_info_addr);
-        DEBUGLOG("Restoring persisted offsets cache");
+        DEBUGLOG("Restoring persisted offsets cache length %zu from 0x%llx", blob_size, dyld_info.all_image_info_addr);
         struct cache_blob *blob = create_cache_blob(blob_size);
         if (kread(dyld_info.all_image_info_addr, blob, blob_size)) import_cache_blob(blob);
         free(blob);
         if (get_offset("kernel_slide") == kernel_slide) {
-#ifdef DEBUG
-            print_cache();
-#endif
             found_offsets = true;
             if (get_offset("kernel_base")) {
                 kernel_base = get_offset("kernel_base");
-                DEBUGLOG("Didn't get kernel_base from cache???");
             } else {
+                DEBUGLOG("Didn't get kernel_base from cache???");
                 kernel_base = dyld_info.all_image_info_size + 0xfffffff007004000;
             }
 
@@ -61,6 +59,8 @@ void ctor() {
             offset_osboolean_false = rk64(get_offset("OSBoolean_True") + sizeof(void *));
             offset_osunserializexml = get_offset("osunserializexml");
             offset_smalloc = get_offset("smalloc");
+            offset_options = get_offset("unrestrict-options");
+            DEBUGLOG("options: 0x%llx, OPT_GET_TASK_ALLOW:%d OPT_CS_DEBUGGED:%d", offset_options, OPT(GET_TASK_ALLOW), OPT(CS_DEBUGGED));
         }
     }
 
