@@ -26,6 +26,10 @@ bool MSunrestrict0(mach_port_t task) {
     if (strcmp(pathbuf, "/usr/libexec/xpcproxy")==0) {
         return true;
     }
+    
+    if (strcmp(pathbuf, "/usr/libexec/securityd")==0) {
+        return true;
+    }
 
     DEBUGLOG("%s: (%d) fixing up", pathbuf, pid);
     fixup(pid);
@@ -45,6 +49,10 @@ bool MSrevalidate0(mach_port_t task) {
     proc_pidpath(pid, pathbuf, sizeof(pathbuf));
 
     if (strcmp(pathbuf, "/usr/libexec/xpcproxy")==0) {
+        return true;
+    }
+    
+    if (strcmp(pathbuf, "/usr/libexec/securityd")==0) {
         return true;
     }
 
