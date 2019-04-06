@@ -8,9 +8,9 @@
 
 #include "common.h"
 #include "kern_utils.h"
-#include "helpers/kexecute.h"
-#include "helpers/kmem.h"
-#include "offset-cache/offsetcache.h"
+#include "kexecute.h"
+#include "kmem.h"
+#include "offsetcache.h"
 
 bool initialized = false;
 uint64_t offset_options = 0;

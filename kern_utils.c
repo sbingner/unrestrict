@@ -4,10 +4,10 @@
 
 #include "common.h"
 #include "kern_utils.h"
-#include "helpers/kexecute.h"
-#include "helpers/kmem.h"
-#include "helpers/offsetof.h"
-#include "helpers/osobject.h"
+#include "kexecute.h"
+#include "kmem.h"
+#include "offsetof.h"
+#include "osobject.h"
 #include "sandbox.h"
 
 mach_port_t tfp0;

@@ -1,7 +1,7 @@
-#include "helpers/kmem.h"
+#include "kmem.h"
 #include "kern_utils.h"
 #include "sandbox.h"
-#include "helpers/kexecute.h"
+#include "kexecute.h"
 #include "common.h"
 
 typedef uint64_t extension_hdr_t;
