@@ -22,12 +22,10 @@ bool MSunrestrict0(mach_port_t task) {
         return true;
     }
     proc_pidpath(pid, pathbuf, sizeof(pathbuf));
-
-    if (strcmp(pathbuf, "/usr/libexec/xpcproxy")==0) {
-        return true;
-    }
     
-    if (strcmp(pathbuf, "/usr/libexec/securityd")==0) {
+    if (strcmp(pathbuf, "/usr/libexec/xpcproxy")==0 ||
+        strcmp(pathbuf, "/usr/libexec/securityd")==0 ||
+        strcmp(pathbuf, "/usr/libexec/trustd")==0) {
         return true;
     }
 
@@ -48,11 +46,9 @@ bool MSrevalidate0(mach_port_t task) {
     }
     proc_pidpath(pid, pathbuf, sizeof(pathbuf));
 
-    if (strcmp(pathbuf, "/usr/libexec/xpcproxy")==0) {
-        return true;
-    }
-    
-    if (strcmp(pathbuf, "/usr/libexec/securityd")==0) {
+    if (strcmp(pathbuf, "/usr/libexec/xpcproxy")==0 ||
+        strcmp(pathbuf, "/usr/libexec/securityd")==0 ||
+        strcmp(pathbuf, "/usr/libexec/trustd")==0) {
         return true;
     }
 
