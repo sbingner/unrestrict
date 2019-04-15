@@ -95,18 +95,12 @@ uint64_t find_port(mach_port_name_t port) {
     return port_addr;
 }
 
-static void set_csflags(uint64_t proc, uint32_t flags, bool value) {
+static void modify_csflags(uint64_t proc, void (^function)(uint32_t *flags)) {
+    if (function == NULL) return;
     uint32_t csflags = rk32(proc + offsetof_p_csflags);
-
-    if (value == true) {
-        csflags |= flags;
-    } else {
-        csflags &= ~flags;
-    }
-
+    function(&csflags);
     wk32(proc + offsetof_p_csflags, csflags);
 }
-
 
 void fixup_setuid(int pid, uint64_t proc, uint64_t ucred, const char *path) {
     struct stat file_st;
@@ -356,7 +350,9 @@ void fixup_tfplatform(uint64_t proc, uint64_t proc_ucred, uint64_t amfi_entitlem
     if (key == offset_osboolean_true) {
         DEBUGLOG("platform-application is set");
         set_tfplatform(proc);
-        set_csflags(proc, CS_PLATFORM_BINARY, true);
+        modify_csflags(proc, ^(uint32_t *flags) {
+            *flags |= CS_PLATFORM_BINARY;
+        });
     } else {
         DEBUGLOG("platform-application is not set");
     }
@@ -367,26 +363,25 @@ void fixup_sandbox(uint64_t proc, uint64_t proc_ucred, uint64_t sandbox) {
 }
 
 void fixup_cs_valid(uint64_t proc) {
-    set_csflags(proc, CS_VALID, true);
+    modify_csflags(proc, ^(uint32_t *flags) {
+        *flags |= CS_VALID;
+    });
 }
 
 void fixup_cs_flags(uint64_t proc) {
-    int flags = 0;
-    if (OPT(GET_TASK_ALLOW)) {
-        DEBUGLOG("adding get-task-allow");
-        flags |= CS_ENTITLEMENT_FLAGS;
-    }
-    if (OPT(CS_DEBUGGED)) {
-        DEBUGLOG("setting CS_DEBUGGED :(");
-        flags |= CS_DEBUGGED;
-    }
-    if (flags) {
-        set_csflags(proc, flags, true);
-    }
-}
-
-void fixup_cs_restrict(uint64_t proc) {
-    set_csflags(proc, CS_RESTRICT, false);
+    modify_csflags(proc, ^(uint32_t *flags) {
+        if (OPT(GET_TASK_ALLOW)) {
+            DEBUGLOG("adding get-task-allow");
+            *flags |= CS_GET_TASK_ALLOW;
+            *flags |= CS_INSTALLER;
+        }
+        if (OPT(CS_DEBUGGED)) {
+            DEBUGLOG("setting CS_DEBUGGED :(");
+            *flags |= CS_DEBUGGED;
+            *flags &= ~CS_HARD;
+            *flags &= ~CS_KILL;
+        }
+    });
 }
 
 void fixup(pid_t pid, const char *path, bool unrestrict) {
@@ -412,8 +407,6 @@ void fixup(pid_t pid, const char *path, bool unrestrict) {
     fixup_tfplatform(proc, proc_ucred, amfi_entitlements);
     DEBUGLOG("fixup_cs_flags");
     fixup_cs_flags(proc);
-    DEBUGLOG("fixup_cs_restrict");
-    fixup_cs_restrict(proc);
     DEBUGLOG("set_amfi_entitlements");
     set_amfi_entitlements(proc, proc_ucred, amfi_entitlements, sandbox);
 }
