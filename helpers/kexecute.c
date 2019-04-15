@@ -5,6 +5,10 @@
 #include "kexecute.h"
 #include "kmem.h"
 #include "offsetof.h"
+#include "kernel_call.h"
+#include "parameters.h"
+#include "kc_parameters.h"
+#include "kernel_memory.h"
 
 mach_port_t prepare_user_client() {
     kern_return_t err;
@@ -36,6 +40,16 @@ static uint64_t fake_client;
 const int fake_kalloc_size = 0x1000;
 
 bool init_kexecute() {
+#if __arm64e__
+    if (!parameters_init()) return false;
+    kernel_task_port = tfp0;
+    if (!kernel_task_port) return false;
+    current_task = rk64(find_port(mach_task_self()) + offsetof_ip_kobject);
+    if (!current_task) return false;
+    kernel_task = rk64(offset_kernel_task);
+    if (!kernel_task) return false;
+    if (!kernel_call_init()) return false;
+#else
     user_client = prepare_user_client();
     if (!user_client) return false;
     
@@ -78,19 +92,27 @@ bool init_kexecute() {
     
     // Replace IOUserClient::getExternalTrapForIndex with our ROP gadget (add x0, x0, #0x40; ret;)
     wk64(fake_vtable+8*0xB7, offset_add_ret_gadget);
-    
+#endif
     pthread_mutex_init(&kexecute_lock, NULL);
     return true;
 }
 
 void term_kexecute() {
+#if __arm64e__
+    kernel_call_deinit();
+#else
     wk64(IOSurfaceRootUserClient_port + offsetof_ip_kobject, IOSurfaceRootUserClient_addr);
     kfree(fake_vtable, fake_kalloc_size);
     kfree(fake_client, fake_kalloc_size);
+#endif
 }
 
 uint64_t kexecute(uint64_t addr, uint64_t x0, uint64_t x1, uint64_t x2, uint64_t x3, uint64_t x4, uint64_t x5, uint64_t x6) {
+    uint64_t returnval = 0;
     pthread_mutex_lock(&kexecute_lock);
+#if __arm64e__
+    returnval = kernel_call_7(addr, 7, x0, x1, x2, x3, x4, x5, x6);
+#else
     
     // When calling IOConnectTrapX, this makes a call to iokit_user_client_trap, which is the user->kernel call (MIG). This then calls IOUserClient::getTargetAndTrapForIndex
     // to get the trap struct (which contains an object and the function pointer itself). This function calls IOUserClient::getExternalTrapForIndex, which is expected to return a trap.
@@ -106,9 +128,10 @@ uint64_t kexecute(uint64_t addr, uint64_t x0, uint64_t x1, uint64_t x2, uint64_t
     uint64_t offx28 = rk64(fake_client+0x48);
     wk64(fake_client+0x40, x0);
     wk64(fake_client+0x48, addr);
-    uint64_t returnval = IOConnectTrap6(user_client, 0, (uint64_t)(x1), (uint64_t)(x2), (uint64_t)(x3), (uint64_t)(x4), (uint64_t)(x5), (uint64_t)(x6));
+    returnval = IOConnectTrap6(user_client, 0, (uint64_t)(x1), (uint64_t)(x2), (uint64_t)(x3), (uint64_t)(x4), (uint64_t)(x5), (uint64_t)(x6));
     wk64(fake_client+0x40, offx20);
     wk64(fake_client+0x48, offx28);
+#endif
     
     pthread_mutex_unlock(&kexecute_lock);
     

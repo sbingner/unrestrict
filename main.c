@@ -62,6 +62,18 @@ void ctor() {
             offset_osunserializexml = get_offset("osunserializexml");
             offset_smalloc = get_offset("smalloc");
             offset_options = get_offset("unrestrict-options");
+            offset_paciza_pointer__l2tp_domain_module_start = get_offset("paciza_pointer__l2tp_domain_module_start");
+            offset_paciza_pointer__l2tp_domain_module_stop = get_offset("paciza_pointer__l2tp_domain_module_stop");
+            offset_l2tp_domain_inited = get_offset("l2tp_domain_inited");
+            offset_sysctl__net_ppp_l2tp = get_offset("sysctl__net_ppp_l2tp");
+            offset_sysctl_unregister_oid = get_offset("sysctl_unregister_oid");
+            offset_mov_x0_x4__br_x5 = get_offset("mov_x0_x4__br_x5");
+            offset_mov_x9_x0__br_x1 = get_offset("mov_x9_x0__br_x1");
+            offset_mov_x10_x3__br_x6 = get_offset("mov_x10_x3__br_x6");
+            offset_kernel_forge_pacia_gadget = get_offset("kernel_forge_pacia_gadget");
+            offset_kernel_forge_pacda_gadget = get_offset("kernel_forge_pacda_gadget");
+            offset_IOUserClient__vtable = get_offset("IOUserClient__vtable");
+            offset_IORegistryEntry__getRegistryEntryID = get_offset("IORegistryEntry__getRegistryEntryID");
             DEBUGLOG("options: 0x%llx, OPT_GET_TASK_ALLOW:%d OPT_CS_DEBUGGED:%d", offset_options, OPT(GET_TASK_ALLOW), OPT(CS_DEBUGGED));
         }
     }
@@ -99,17 +111,30 @@ void ctor() {
         }
 
         // TODO: CFStringGetCStringPtr is not to be relied upon like this... bad things will happen if this is not fixed
-        kernel_base             = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("KernelBase")), kCFStringEncodingUTF8), NULL, 16);
-        kernel_slide            = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("KernelSlide")), kCFStringEncodingUTF8), NULL, 16);
+        kernel_base                                     = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("KernelBase")), kCFStringEncodingUTF8), NULL, 16);
+        kernel_slide                                    = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("KernelSlide")), kCFStringEncodingUTF8), NULL, 16);
 
-        offset_kernel_task      = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("KernelTask")), kCFStringEncodingUTF8), NULL, 16);
-        offset_zonemap          = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("ZoneMapOffset")), kCFStringEncodingUTF8), NULL, 16);
+        offset_kernel_task                              = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("KernelTask")), kCFStringEncodingUTF8), NULL, 16);
+        offset_zonemap                                  = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("ZoneMapOffset")), kCFStringEncodingUTF8), NULL, 16);
 
-        offset_add_ret_gadget   = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("AddRetGadget")), kCFStringEncodingUTF8), NULL, 16);
-        offset_osboolean_true   = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("OSBooleanTrue")), kCFStringEncodingUTF8), NULL, 16);
-        offset_osboolean_false  = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("OSBooleanFalse")), kCFStringEncodingUTF8), NULL, 16);
-        offset_osunserializexml = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("OSUnserializeXML")), kCFStringEncodingUTF8), NULL, 16);
-        offset_smalloc          = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("Smalloc")), kCFStringEncodingUTF8), NULL, 16);
+        offset_add_ret_gadget                           = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("AddRetGadget")), kCFStringEncodingUTF8), NULL, 16);
+        offset_osboolean_true                           = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("OSBooleanTrue")), kCFStringEncodingUTF8), NULL, 16);
+        offset_osboolean_false                          = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("OSBooleanFalse")), kCFStringEncodingUTF8), NULL, 16);
+        offset_osunserializexml                         = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("OSUnserializeXML")), kCFStringEncodingUTF8), NULL, 16);
+        offset_smalloc                                  = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("Smalloc")), kCFStringEncodingUTF8), NULL, 16);
+        offset_paciza_pointer__l2tp_domain_module_start = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("PacizaPointerL2TPDomainModuleStart")), kCFStringEncodingUTF8), NULL, 16);
+        offset_paciza_pointer__l2tp_domain_module_stop  = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("PacizaPointerL2TPDomainModuleStop")), kCFStringEncodingUTF8), NULL, 16);
+        offset_l2tp_domain_inited                       = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("L2TPDomainInited")), kCFStringEncodingUTF8), NULL, 16);
+        offset_sysctl__net_ppp_l2tp                     = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("SysctlNetPPPL2TP")), kCFStringEncodingUTF8), NULL, 16);
+        offset_sysctl_unregister_oid                    = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("SysctlUnregisterOid")), kCFStringEncodingUTF8), NULL, 16);
+        offset_mov_x0_x4__br_x5                         = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("MovX0X4BrX5")), kCFStringEncodingUTF8), NULL, 16);
+        offset_mov_x9_x0__br_x1                         = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("MovX9X0BrX1")), kCFStringEncodingUTF8), NULL, 16);
+        offset_mov_x10_x3__br_x6                        = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("MovX10X3BrX6")), kCFStringEncodingUTF8), NULL, 16);
+        offset_kernel_forge_pacia_gadget                = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("KernelForgePaciaGadget")), kCFStringEncodingUTF8), NULL, 16);
+        offset_kernel_forge_pacda_gadget                = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("KernelForgePacdaGadget")), kCFStringEncodingUTF8), NULL, 16);
+        offset_IOUserClient__vtable                     = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("IOUserClientVtable")), kCFStringEncodingUTF8), NULL, 16);
+        offset_IORegistryEntry__getRegistryEntryID      = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("IORegistryEntryGetRegistryEntryID")), kCFStringEncodingUTF8), NULL, 16);
+        
         CFRelease(offsets);
         found_offsets = true;
     }
@@ -122,6 +147,19 @@ void ctor() {
     DEBUGLOG("offset_osboolean_false: %llx", offset_osboolean_false);
     DEBUGLOG("offset_osunserializexml: %llx", offset_osunserializexml);
     DEBUGLOG("offset_smalloc: %llx", offset_smalloc);
+    DEBUGLOG("offset_paciza_pointer__l2tp_domain_module_start: %llx", offset_paciza_pointer__l2tp_domain_module_start);
+    DEBUGLOG("offset_paciza_pointer__l2tp_domain_module_stop: %llx", offset_paciza_pointer__l2tp_domain_module_stop);
+    DEBUGLOG("offset_l2tp_domain_inited: %llx", offset_l2tp_domain_inited);
+    DEBUGLOG("offset_sysctl__net_ppp_l2tp: %llx", offset_sysctl__net_ppp_l2tp);
+    DEBUGLOG("offset_sysctl_unregister_oid: %llx", offset_sysctl_unregister_oid);
+    DEBUGLOG("offset_mov_x0_x4__br_x5: %llx", offset_mov_x0_x4__br_x5);
+    DEBUGLOG("offset_mov_x9_x0__br_x1: %llx", offset_mov_x9_x0__br_x1);
+    DEBUGLOG("offset_mov_x10_x3__br_x6: %llx", offset_mov_x10_x3__br_x6);
+    DEBUGLOG("offset_kernel_forge_pacia_gadget: %llx", offset_kernel_forge_pacia_gadget);
+    DEBUGLOG("offset_kernel_forge_pacda_gadget: %llx", offset_kernel_forge_pacda_gadget);
+    DEBUGLOG("offset_IOUserClient__vtable: %llx", offset_IOUserClient__vtable);
+    DEBUGLOG("offset_IORegistryEntry__getRegistryEntryID: %llx", offset_IORegistryEntry__getRegistryEntryID);
+    
 
     #define MEMORYSTATUS_CMD_SET_JETSAM_TASK_LIMIT 6
     extern int memorystatus_control(uint32_t command, int32_t pid, uint32_t flags, void *buffer, size_t buffersize);

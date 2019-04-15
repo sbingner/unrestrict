@@ -2,13 +2,13 @@ TARGET  = Unrestrict.dylib
 OUTDIR ?= bin
 DSYMDIR ?= dsym
 PREFIX ?= /Library/MobileSubstrate/ServerPlugins
-ARCHS  ?= arm64
-SRC	= $(wildcard *.c helpers/*.c offset-cache/*.c)
+ARCHS  ?= arm64 arm64e
+SRC	= $(wildcard *.c helpers/*.c offset-cache/*.c kernel_call/*.c)
 OBJ	= $(SRC:.c=.o)
 
 CC      = xcrun -sdk iphoneos gcc $(patsubst %,-arch %,$(ARCHS))
 LDID    = ldid
-CFLAGS  = -I. -Ihelpers -Ioffset-cache -Wno-deprecated-declarations -g
+CFLAGS  = -I. -Ihelpers -Ioffset-cache -Ikernel_call -Wno-deprecated-declarations -g
 LDFLAGS = -framework IOKit -framework CoreFoundation
 
 ifeq ($(DEBUG),1)

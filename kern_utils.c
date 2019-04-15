@@ -21,6 +21,18 @@ uint64_t offset_osboolean_true;
 uint64_t offset_osboolean_false;
 uint64_t offset_osunserializexml;
 uint64_t offset_smalloc;
+uint64_t offset_paciza_pointer__l2tp_domain_module_start;
+uint64_t offset_paciza_pointer__l2tp_domain_module_stop;
+uint64_t offset_l2tp_domain_inited;
+uint64_t offset_sysctl__net_ppp_l2tp;
+uint64_t offset_sysctl_unregister_oid;
+uint64_t offset_mov_x0_x4__br_x5;
+uint64_t offset_mov_x9_x0__br_x1;
+uint64_t offset_mov_x10_x3__br_x6;
+uint64_t offset_kernel_forge_pacia_gadget;
+uint64_t offset_kernel_forge_pacda_gadget;
+uint64_t offset_IOUserClient__vtable;
+uint64_t offset_IORegistryEntry__getRegistryEntryID;
 
 uint64_t proc_find(pid_t pid) {
     static uint64_t kernproc = 0;
