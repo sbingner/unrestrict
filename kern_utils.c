@@ -374,7 +374,7 @@ void fixup_cs_flags(uint64_t proc) {
     int flags = 0;
     if (OPT(GET_TASK_ALLOW)) {
         DEBUGLOG("adding get-task-allow");
-        flags |= CS_GET_TASK_ALLOW;
+        flags |= CS_ENTITLEMENT_FLAGS;
     }
     if (OPT(CS_DEBUGGED)) {
         DEBUGLOG("setting CS_DEBUGGED :(");
