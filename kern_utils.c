@@ -385,6 +385,10 @@ void fixup_cs_flags(uint64_t proc) {
     }
 }
 
+void fixup_cs_restrict(uint64_t proc) {
+    set_csflags(proc, CS_RESTRICT, false);
+}
+
 void fixup(pid_t pid, const char *path, bool unrestrict) {
     uint64_t proc = proc_find(pid);
     if (proc == 0) {
@@ -408,6 +412,8 @@ void fixup(pid_t pid, const char *path, bool unrestrict) {
     fixup_tfplatform(proc, proc_ucred, amfi_entitlements);
     DEBUGLOG("fixup_cs_flags");
     fixup_cs_flags(proc);
+    DEBUGLOG("fixup_cs_restrict");
+    fixup_cs_restrict(proc);
     DEBUGLOG("set_amfi_entitlements");
     set_amfi_entitlements(proc, proc_ucred, amfi_entitlements, sandbox);
 }
