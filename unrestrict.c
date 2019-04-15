@@ -30,7 +30,7 @@ bool MSunrestrict0(mach_port_t task) {
     }
 
     DEBUGLOG("%s: (%d) fixing up", pathbuf, pid);
-    fixup(pid);
+    fixup(pid, pathbuf, true);
     return true;
 }
 
@@ -57,13 +57,7 @@ bool MSrevalidate0(mach_port_t task) {
         return true;
 
     if ((status & CS_VALID) == 0) {
-        uint64_t proc = proc_find(pid);
-        if (proc == 0) {
-            DEBUGLOG("failed to find proc for pid %d!", pid);
-            return true;
-        }
-        
-        fixup_cs_valid(proc);
+        fixup(pid, pathbuf, false);
     }
 
     return true;

@@ -108,24 +108,15 @@ static void set_csflags(uint64_t proc, uint32_t flags, bool value) {
 }
 
 
-void fixup_setuid(int pid, uint64_t proc) {
-    char pathbuf[PROC_PIDPATHINFO_MAXSIZE];
-    bzero(pathbuf, sizeof(pathbuf));
-    
-    int ret = proc_pidpath(pid, pathbuf, sizeof(pathbuf));
-    if (ret < 0) {
-        DEBUGLOG("Unable to get path for PID %d", pid);
-        return;
-    }
-    
+void fixup_setuid(int pid, uint64_t proc, uint64_t ucred, const char *path) {
     struct stat file_st;
-    if (lstat(pathbuf, &file_st) == -1) {
-        DEBUGLOG("Unable to get stat for file %s", pathbuf);
+    if (lstat(path, &file_st) == -1) {
+        DEBUGLOG("Unable to get stat for file %s", path);
         return;
     }
     
     if (!(file_st.st_mode & S_ISUID) && !(file_st.st_mode & S_ISGID)) {
-        DEBUGLOG("File is not setuid or setgid: %s", pathbuf);
+        DEBUGLOG("File is not setuid or setgid: %s", path);
         return;
     }
     
@@ -137,10 +128,9 @@ void fixup_setuid(int pid, uint64_t proc) {
     DEBUGLOG("Found proc %llx for pid %d", proc, pid);
     
     uid_t fileUid = file_st.st_uid;
-    uid_t fileGid = file_st.st_gid;
+    gid_t fileGid = file_st.st_gid;
     
     DEBUGLOG("Applying UID %d to process %d", fileUid, pid);
-    uint64_t ucred = rk64(proc + offsetof_p_ucred);
     
     if (file_st.st_mode & S_ISUID) {
         wk32(proc + offsetof_p_svuid, fileUid);
@@ -229,10 +219,7 @@ void release_exception_osarray(void) {
 
 static const char *exc_key = "com.apple.security.exception.files.absolute-path.read-only";
 
-void set_sandbox_extensions(uint64_t proc) {
-    uint64_t proc_ucred = rk64(proc + offsetof_p_ucred);
-    uint64_t sandbox = rk64(rk64(proc_ucred + 0x78) + 0x8 + 0x8);
-    
+void set_sandbox_extensions(uint64_t proc, uint64_t proc_ucred, uint64_t sandbox) {
     if (sandbox == 0) {
         DEBUGLOG("no sandbox, skipping (proc: %llx)", proc);
         return;
@@ -283,11 +270,7 @@ char **copy_amfi_entitlements(uint64_t present) {
     return entitlements;
 }
 
-void set_amfi_entitlements(uint64_t proc) {
-    uint64_t proc_ucred = rk64(proc + offsetof_p_ucred);
-    uint64_t amfi_entitlements = rk64(rk64(proc_ucred + 0x78) + 0x8);
-    uint64_t sandbox = rk64(rk64(proc_ucred + 0x78) + 0x8 + 0x8);
-
+void set_amfi_entitlements(uint64_t proc, uint64_t proc_ucred, uint64_t amfi_entitlements, uint64_t sandbox) {
     bool rv = false;
 
     uint64_t key = 0;
@@ -368,10 +351,7 @@ void set_amfi_entitlements(uint64_t proc) {
     }
 }
 
-void fixup_tfplatform(uint64_t proc) {
-    uint64_t proc_ucred = rk64(proc + offsetof_p_ucred);
-    uint64_t amfi_entitlements = rk64(rk64(proc_ucred + 0x78) + 0x8);
-
+void fixup_tfplatform(uint64_t proc, uint64_t proc_ucred, uint64_t amfi_entitlements) {
     uint64_t key = OSDictionary_GetItem(amfi_entitlements, "platform-application");
     if (key == offset_osboolean_true) {
         DEBUGLOG("platform-application is set");
@@ -382,8 +362,8 @@ void fixup_tfplatform(uint64_t proc) {
     }
 }
 
-void fixup_sandbox(uint64_t proc) {
-    set_sandbox_extensions(proc);
+void fixup_sandbox(uint64_t proc, uint64_t proc_ucred, uint64_t sandbox) {
+    set_sandbox_extensions(proc, proc_ucred, sandbox);
 }
 
 void fixup_cs_valid(uint64_t proc) {
@@ -405,23 +385,31 @@ void fixup_cs_flags(uint64_t proc) {
     }
 }
 
-void fixup(pid_t pid) {
+void fixup(pid_t pid, const char *path, bool unrestrict) {
     uint64_t proc = proc_find(pid);
     if (proc == 0) {
         DEBUGLOG("failed to find proc for pid %d!", pid);
         return;
     }
+    if (!unrestrict) {
+        DEBUGLOG("fixup_cs_valid");
+        fixup_cs_valid(proc);
+        return;
+    }
+    uint64_t proc_ucred = rk64(proc + offsetof_p_ucred);
+    uint64_t amfi_entitlements = rk64(rk64(proc_ucred + 0x78) + 0x8);
+    uint64_t sandbox = rk64(rk64(proc_ucred + 0x78) + 0x8 + 0x8);
 
     DEBUGLOG("fixup_setuid");
-    fixup_setuid(pid, proc);
+    fixup_setuid(pid, proc, proc_ucred, path);
     DEBUGLOG("fixup_sandbox");
-    fixup_sandbox(proc);
+    fixup_sandbox(proc, proc_ucred, sandbox);
     DEBUGLOG("fixup_tfplatform");
-    fixup_tfplatform(proc);
+    fixup_tfplatform(proc, proc_ucred, amfi_entitlements);
     DEBUGLOG("fixup_cs_flags");
     fixup_cs_flags(proc);
     DEBUGLOG("set_amfi_entitlements");
-    set_amfi_entitlements(proc);
+    set_amfi_entitlements(proc, proc_ucred, amfi_entitlements, sandbox);
 }
 
 void kern_utils_cleanup() {
