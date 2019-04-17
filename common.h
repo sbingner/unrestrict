@@ -32,11 +32,12 @@ struct timeval dl_tv;
     fflush(log_file);                                               \
 } while(0)
 #define CROAK(fmt, args...) LOG("%s:%d:%d:" fmt, __FILE__, __LINE__, errno, ##args)
-#ifdef DEBUG
-#define DEBUGLOG(fmt, args...) LOG(fmt, ##args)
-#else
-#define DEBUGLOG(fmt, args...) do {} while (0)
-#endif // ifdef DEBUG
+#define DEBUGLOG(fmt, args...) do { \
+    if (access("/var/tmp/.unrestrict_debug", F_OK) != 0) { \
+        break; \
+    } \
+    LOG(fmt, ##args); \
+} while (0)
 
 #define CACHED_FIND(type, name)         \
     type __##name(void);                \

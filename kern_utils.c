@@ -405,23 +405,32 @@ void fixup(pid_t pid, const char *path, bool unrestrict) {
         return;
     }
     
+    DEBUGLOG("Fixing up task flags for pid 0x%x (path %s)", pid, path);
+    fixup_t_flags(proc);
+    
+    DEBUGLOG("Fixing up codesign flags for pid 0x%x (path %s)", pid, path);
+    fixup_cs_flags(proc);
+    
     uint64_t proc_ucred = rk64(proc + offsetof_p_ucred);
     if (proc_ucred == 0) {
         DEBUGLOG("Failed to find proc credentials for pid 0x%x (path %s)", pid, path);
         return;
     }
     
-    uint64_t amfi_entitlements = rk64(rk64(proc_ucred + 0x78) + 0x8);
-    uint64_t sandbox = rk64(rk64(proc_ucred + 0x78) + 0x8 + 0x8);
-
     DEBUGLOG("Fixing up setuid for pid 0x%x (path %s)", pid, path);
     fixup_setuid(pid, proc, proc_ucred, path);
+    
+    uint64_t amfi_entitlements = rk64(rk64(proc_ucred + 0x78) + 0x8);
+    if (amfi_entitlements == 0) {
+        DEBUGLOG("Failed to find amfi_entitlements for pid 0x%x (path %s)", pid, path);
+        return;
+    }
+    
+    uint64_t sandbox = rk64(rk64(proc_ucred + 0x78) + 0x8 + 0x8);
+    
     DEBUGLOG("Fixing up sandbox for pid 0x%x (path %s)", pid, path);
     fixup_sandbox(proc, proc_ucred, sandbox);
-    DEBUGLOG("Fixing up task flags for pid 0x%x (path %s)", pid, path);
-    fixup_t_flags(proc);
-    DEBUGLOG("Fixing up codesign flags for pid 0x%x (path %s)", pid, path);
-    fixup_cs_flags(proc);
+    
     DEBUGLOG("Fixing up AMFI entitlements for pid 0x%x (path %s)", pid, path);
     set_amfi_entitlements(proc, proc_ucred, amfi_entitlements, sandbox);
 }
