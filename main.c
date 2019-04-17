@@ -129,6 +129,7 @@ void ctor() {
     
     if (found_offsets && init_kexecute() && OSDictionary_SetItem(rk64(rk64(rk64(proc_find(getpid()) + offsetof_p_ucred) + 0x78) + 0x8), "com.apple.private.memorystatus", offset_osboolean_true) && memorystatus_control(MEMORYSTATUS_CMD_SET_JETSAM_TASK_LIMIT, getpid(), 0, NULL, 0) == 0) {
         DEBUGLOG("Initialized successfully!");
+        pthread_mutex_init(&fixup_lock, NULL);
         initialized = true;
     } else {
         DEBUGLOG("Failed to initialize kexecute :(");

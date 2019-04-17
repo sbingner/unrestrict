@@ -392,47 +392,69 @@ void fixup_t_flags(uint64_t proc) {
     });
 }
 
-void fixup(pid_t pid, const char *path, bool unrestrict) {
+pthread_mutex_t fixup_lock;
+
+void fixup_process(const struct process_fixup *fixup, int options) {
+    pthread_mutex_lock(&fixup_lock);
+    
+    pid_t pid = fixup->process_pid;
+    const char *path = fixup->process_path;
+    
     uint64_t proc = proc_find(pid);
     if (proc == 0) {
         DEBUGLOG("Failed to find proc for pid 0x%x (path %s)", pid, path);
-        return;
+        goto out;
     }
     
-    if (!unrestrict) {
-        DEBUGLOG("Fixing up codesign validity for pid 0x%x (path %s)", pid, path);
+    if ((options & FIXUP_CS_FLAGS)) {
+        DEBUGLOG("Fixing up codesign flags for pid 0x%x (path %s)", pid, path);
         fixup_cs_flags(proc);
-        return;
     }
     
-    DEBUGLOG("Fixing up task flags for pid 0x%x (path %s)", pid, path);
-    fixup_t_flags(proc);
+    if ((options & FIXUP_T_FLAGS)) {
+        DEBUGLOG("Fixing up task flags for pid 0x%x (path %s)", pid, path);
+        fixup_t_flags(proc);
+    }
     
-    DEBUGLOG("Fixing up codesign flags for pid 0x%x (path %s)", pid, path);
-    fixup_cs_flags(proc);
+    if (!(options & FIXUP_SETUID) && !(options & FIXUP_SANDBOX) && !(options & FIXUP_AMFI_ENTITLEMENTS)) {
+        goto out;
+    }
     
     uint64_t proc_ucred = rk64(proc + offsetof_p_ucred);
     if (proc_ucred == 0) {
         DEBUGLOG("Failed to find proc credentials for pid 0x%x (path %s)", pid, path);
-        return;
+        goto out;
     }
     
-    DEBUGLOG("Fixing up setuid for pid 0x%x (path %s)", pid, path);
-    fixup_setuid(pid, proc, proc_ucred, path);
+    if ((options & FIXUP_SETUID)) {
+        DEBUGLOG("Fixing up setuid for pid 0x%x (path %s)", pid, path);
+        fixup_setuid(pid, proc, proc_ucred, path);
+    }
+    
+    if (!(options & FIXUP_SANDBOX) && !(options & FIXUP_AMFI_ENTITLEMENTS)) {
+        goto out;
+    }
     
     uint64_t amfi_entitlements = rk64(rk64(proc_ucred + 0x78) + 0x8);
     if (amfi_entitlements == 0) {
         DEBUGLOG("Failed to find amfi_entitlements for pid 0x%x (path %s)", pid, path);
-        return;
+        goto out;
     }
     
     uint64_t sandbox = rk64(rk64(proc_ucred + 0x78) + 0x8 + 0x8);
     
-    DEBUGLOG("Fixing up sandbox for pid 0x%x (path %s)", pid, path);
-    fixup_sandbox(proc, proc_ucred, sandbox);
+    if ((options & FIXUP_SANDBOX)) {
+        DEBUGLOG("Fixing up sandbox for pid 0x%x (path %s)", pid, path);
+        fixup_sandbox(proc, proc_ucred, sandbox);
+    }
     
-    DEBUGLOG("Fixing up AMFI entitlements for pid 0x%x (path %s)", pid, path);
-    set_amfi_entitlements(proc, proc_ucred, amfi_entitlements, sandbox);
+    if ((options & FIXUP_AMFI_ENTITLEMENTS)) {
+        DEBUGLOG("Fixing up AMFI entitlements for pid 0x%x (path %s)", pid, path);
+        set_amfi_entitlements(proc, proc_ucred, amfi_entitlements, sandbox);
+    }
+    
+out:
+    pthread_mutex_unlock(&fixup_lock);
 }
 
 void kern_utils_cleanup() {

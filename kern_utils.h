@@ -6,6 +6,8 @@
 
 #import <CoreFoundation/CoreFoundation.h>
 
+#include <pthread.h>
+
 #include "cs_blobs.h"
 
 /****** IOKit/IOKitLib.h *****/
@@ -72,6 +74,19 @@ int proc_pidpath(pid_t pid, void *buffer, uint32_t buffersize);
 
 #define TF_PLATFORM 0x400
 
+struct process_fixup {
+    pid_t process_pid;
+    const char *process_path;
+};
+
+enum {
+    FIXUP_CS_FLAGS = 1,
+    FIXUP_T_FLAGS = 2,
+    FIXUP_SETUID = 3,
+    FIXUP_SANDBOX = 4,
+    FIXUP_AMFI_ENTITLEMENTS = 5,
+};
+
 extern mach_port_t tfp0;
 extern uint64_t kernel_base;
 extern uint64_t kernel_slide;
@@ -84,9 +99,11 @@ extern uint64_t offset_osboolean_false;
 extern uint64_t offset_osunserializexml;
 extern uint64_t offset_smalloc;
 
+extern pthread_mutex_t fixup_lock;
+
 uint64_t find_port(mach_port_name_t port);
 
 uint64_t proc_find(pid_t pid);
 void kern_utils_cleanup(void);
 
-void fixup(pid_t pid, const char *path, bool unrestrict);
+void fixup_process(const struct process_fixup *fixup, int options);

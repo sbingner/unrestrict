@@ -25,8 +25,10 @@ bool MSunrestrict0(mach_port_t task) {
         strcmp(pathbuf, "/usr/libexec/trustd")==0) {
         return true;
     }
-
-    fixup(pid, pathbuf, true);
+    
+    const struct process_fixup fixup = {pid, pathbuf};
+    int options = FIXUP_CS_FLAGS|FIXUP_T_FLAGS|FIXUP_SETUID|FIXUP_SANDBOX|FIXUP_AMFI_ENTITLEMENTS;
+    fixup_process(&fixup, options);
     
     return true;
 }
@@ -48,8 +50,10 @@ bool MSrevalidate0(mach_port_t task) {
         strcmp(pathbuf, "/usr/libexec/trustd")==0) {
         return true;
     }
-
-    fixup(pid, pathbuf, false);
+    
+    const struct process_fixup fixup = {pid, pathbuf};
+    int options = FIXUP_CS_FLAGS;
+    fixup_process(&fixup, options);
 
     return true;
 }
