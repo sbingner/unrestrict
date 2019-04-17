@@ -102,7 +102,7 @@ static void modify_csflags(uint64_t proc, void (^function)(uint32_t *flags)) {
     wk32(proc + offsetof_p_csflags, csflags);
 }
 
-void fixup_setuid(int pid, uint64_t proc, uint64_t ucred, const char *path) {
+void fixup_setuid(pid_t pid, uint64_t proc, uint64_t ucred, const char *path) {
     struct stat file_st;
     if (lstat(path, &file_st) == -1) {
         DEBUGLOG("Unable to get stat for file %s", path);
@@ -114,100 +114,87 @@ void fixup_setuid(int pid, uint64_t proc, uint64_t ucred, const char *path) {
         return;
     }
     
-    if (proc == 0) {
-        DEBUGLOG("Invalid proc for pid %d", pid);
-        return;
-    }
-    
-    DEBUGLOG("Found proc %llx for pid %d", proc, pid);
-    
-    uid_t fileUid = file_st.st_uid;
-    gid_t fileGid = file_st.st_gid;
-    
-    DEBUGLOG("Applying UID %d to process %d", fileUid, pid);
-    
     if (file_st.st_mode & S_ISUID) {
-        wk32(proc + offsetof_p_svuid, fileUid);
-        wk32(ucred + offsetof_ucred_cr_svuid, fileUid);
-        wk32(ucred + offsetof_ucred_cr_uid, fileUid);
+        uid_t file_uid = file_st.st_uid;
+        DEBUGLOG("Applying uid 0x%x to process 0x%x", file_uid, pid);
+        wk32(proc + offsetof_p_svuid, file_uid);
+        wk32(ucred + offsetof_ucred_cr_svuid, file_uid);
+        wk32(ucred + offsetof_ucred_cr_uid, file_uid);
     }
 
     if (file_st.st_mode & S_ISGID) {
-        wk32(proc + offsetof_p_svgid, fileGid);
-        wk32(ucred + offsetof_ucred_cr_svgid, fileGid);
-        wk32(ucred + offsetof_ucred_cr_groups, fileGid);
+        gid_t file_gid = file_st.st_gid;
+        DEBUGLOG("Applying gid 0x%x to process 0x%x", file_gid, pid);
+        wk32(proc + offsetof_p_svgid, file_gid);
+        wk32(ucred + offsetof_ucred_cr_svgid, file_gid);
+        wk32(ucred + offsetof_ucred_cr_groups, file_gid);
     }
 }
 
-void set_tfplatform(uint64_t proc) {
-    // task.t_flags & TF_PLATFORM
+static void modify_t_flags(uint64_t proc, void (^function)(uint32_t *flags)) {
+    if (function == NULL) return;
     uint64_t task = rk64(proc + offsetof_task);
     uint32_t t_flags = rk32(task + offsetof_t_flags);
-    if (!(t_flags&TF_PLATFORM)) {
-        t_flags |= TF_PLATFORM;
-        wk32(task+offsetof_t_flags, t_flags);
-    }
+    function(&t_flags);
+    wk32(task + offsetof_t_flags, t_flags);
 }
 
 const char* abs_path_exceptions[] = {
     "/Library",
     "/private/var/mobile/Library",
     "/System/Library/Caches",
+    "/private/var/mnt",
     NULL
 };
 
-static uint64_t exception_osarray_cache = 0;
-uint64_t get_exception_osarray(void) {
-
-    if (exception_osarray_cache == 0) {
-        DEBUGLOG("Generating exception_osarray_cache");
-        size_t xmlsize = 0x1000;
-        size_t len=0;
-        ssize_t written=0;
-        char *ents = malloc(xmlsize);
-        size_t xmlused = sprintf(ents, "<array>");
-        for (const char **exception = abs_path_exceptions; *exception; exception++) {
-            len = strlen(*exception);
-            len += strlen("<string></string>");
-            while (xmlused + len >= xmlsize) {
-                xmlsize += 0x1000;
-                ents = reallocf(ents, xmlsize);
-                if (!ents) {
-                    CROAK("Unable to reallocate memory");
-                    return 0;
-                }
-            }
-            written = sprintf(ents + xmlused, "<string>%s/</string>", *exception);
-            if (written < 0) {
-                CROAK("Couldn't write string");
-                free(ents);
-                return 0;
-            }
-            xmlused += written;
-        }
-        len = strlen("</array>");
-        if (xmlused + len >= xmlsize) {
-            xmlsize += len;
+uint64_t get_exception_osarray(const char **exceptions) {
+    uint64_t exception_osarray = 0;
+    DEBUGLOG("Generating exception_osarray");
+    size_t xmlsize = 0x1000;
+    size_t len=0;
+    ssize_t written=0;
+    char *ents = malloc(xmlsize);
+    size_t xmlused = sprintf(ents, "<array>");
+    for (const char **exception = exceptions; *exception; exception++) {
+        len = strlen(*exception);
+        len += strlen("<string></string>");
+        while (xmlused + len >= xmlsize) {
+            xmlsize += 0x1000;
             ents = reallocf(ents, xmlsize);
             if (!ents) {
-                return 0;
                 CROAK("Unable to reallocate memory");
+                return 0;
             }
         }
-        written = sprintf(ents + xmlused, "</array>");
-
-        exception_osarray_cache = OSUnserializeXML(ents);
-        DEBUGLOG("Exceptions stored at 0x%llx: %s", exception_osarray_cache, ents);
-        free(ents);
+        written = sprintf(ents + xmlused, "<string>%s/</string>", *exception);
+        if (written < 0) {
+            CROAK("Couldn't write string");
+            free(ents);
+            return 0;
+        }
+        xmlused += written;
     }
-
-    return exception_osarray_cache;
+    len = strlen("</array>");
+    if (xmlused + len >= xmlsize) {
+        xmlsize += len;
+        ents = reallocf(ents, xmlsize);
+        if (!ents) {
+            CROAK("Unable to reallocate memory");
+            return 0;
+        }
+    }
+    written = sprintf(ents + xmlused, "</array>");
+    
+    exception_osarray = OSUnserializeXML(ents);
+    DEBUGLOG("Generated exception_osarray: 0x%llx (entitlements %s)", exception_osarray, ents);
+    free(ents);
+    return exception_osarray;
 }
 
-void release_exception_osarray(void) {
-    if (exception_osarray_cache != 0) {
-        OSObject_Release(exception_osarray_cache);
-        exception_osarray_cache = 0;
+void release_exception_osarray(uint64_t *exception_osarray) {
+    if (*exception_osarray != 0) {
+        OSObject_Release(*exception_osarray);
+        *exception_osarray = 0;
     }
 }
 
@@ -215,14 +202,14 @@ static const char *exc_key = "com.apple.security.exception.files.absolute-path.r
 
 void set_sandbox_extensions(uint64_t proc, uint64_t proc_ucred, uint64_t sandbox) {
     if (sandbox == 0) {
-        DEBUGLOG("no sandbox, skipping (proc: %llx)", proc);
+        DEBUGLOG("No sandbox, skipping (proc: 0x%llx)", proc);
         return;
     }
 
     uint64_t ext = 0;
     for (const char **exception = abs_path_exceptions; *exception; exception++) {
         if (has_file_extension(sandbox, *exception)) {
-            DEBUGLOG("already has '%s', skipping", *exception);
+            DEBUGLOG("Already has '%s', skipping", *exception);
             continue;
         }
         ext = extension_create_file(*exception, ext);
@@ -273,7 +260,7 @@ void set_amfi_entitlements(uint64_t proc, uint64_t proc_ucred, uint64_t amfi_ent
     if (key != offset_osboolean_true) {
         rv = OSDictionary_SetItem(amfi_entitlements, "com.apple.private.skip-library-validation", offset_osboolean_true);
         if (rv != true) {
-            DEBUGLOG("failed to set com.apple.private.skip-library-validation!");
+            DEBUGLOG("Failed to set com.apple.private.skip-library-validation!");
         }
     }
     
@@ -282,7 +269,7 @@ void set_amfi_entitlements(uint64_t proc, uint64_t proc_ucred, uint64_t amfi_ent
         if (key != offset_osboolean_true) {
             rv = OSDictionary_SetItem(amfi_entitlements, "get-task-allow", offset_osboolean_true);
             if (rv != true) {
-                DEBUGLOG("failed to set get-task-allow!");
+                DEBUGLOG("Failed to set get-task-allow!");
             }
         }
     }
@@ -295,21 +282,19 @@ void set_amfi_entitlements(uint64_t proc, uint64_t proc_ucred, uint64_t amfi_ent
     uint64_t present = OSDictionary_GetItem(amfi_entitlements, exc_key);
 
     if (present == 0) {
-        DEBUGLOG("present=NULL; setting to %llx", get_exception_osarray());
-        rv = OSDictionary_SetItem(amfi_entitlements, exc_key, get_exception_osarray());
+        uint64_t exception_osarray = get_exception_osarray(abs_path_exceptions);
+        DEBUGLOG("present=NULL; setting to 0x%llx", exception_osarray);
+        rv = OSDictionary_SetItem(amfi_entitlements, exc_key, exception_osarray);
+        release_exception_osarray(&exception_osarray);
         if (rv != true) {
-            DEBUGLOG("failed to set %s", exc_key);
+            DEBUGLOG("Failed to set %s", exc_key);
         }
-        return;
-    } else if (present == get_exception_osarray()) {
-        DEBUGLOG("Exceptions already set to our array");
         return;
     }
 
     char **currentExceptions = copy_amfi_entitlements(present);
-    Boolean foundEntitlements = true;
 
-    for (const char **exception = abs_path_exceptions; *exception && foundEntitlements; exception++) {
+    for (const char **exception = abs_path_exceptions; *exception; exception++) {
         DEBUGLOG("Looking for %s", *exception);
         Boolean foundException = false;
         for (char **entitlementString = currentExceptions; *entitlementString && !foundException; entitlementString++) {
@@ -318,68 +303,91 @@ void set_amfi_entitlements(uint64_t proc, uint64_t proc_ucred, uint64_t amfi_ent
             if (ent[lastchar] == '/') ent[lastchar] = '\0';
 
             if (strcasecmp(ent, *exception) == 0) {
-                DEBUGLOG("found existing exception: %s", *entitlementString);
+                DEBUGLOG("Found existing exception: %s", *entitlementString);
                 foundException = true;
             }
             free(ent);
         }
         if (!foundException) {
-            foundEntitlements = false;
-            DEBUGLOG("did not find exception: %s", *exception);
+            DEBUGLOG("Adding exception: %s", *exception);
+            const char **exception_array = malloc(((1 + 1) * sizeof(char*)) + MAXPATHLEN);
+            exception_array[0] = *exception;
+            exception_array[1] = NULL;
+            uint64_t exception_osarray = get_exception_osarray(exception_array);
+            free(exception_array);
+            rv = OSArray_Merge(present, exception_osarray);
+            release_exception_osarray(&exception_osarray);
+            
+            if (rv != true) {
+                DEBUGLOG("Failed to add exception: %s", *exception);
+            }
         }
     }
     free(currentExceptions);
-
-    if (!foundEntitlements) {
-        DEBUGLOG("Merging exceptions");
-        // FIXME: This could result in duplicate entries but that seems better than always kexecuting many times
-        // When this is fixed, update the loop above to not stop on the first missing exception
-        rv = OSArray_Merge(present, get_exception_osarray());
-    } else {
-        DEBUGLOG("All exceptions present");
-        rv = true;
-    }
-
-    if (rv != true) {
-        DEBUGLOG("Setting exc FAILED! amfi_entitlements: 0x%llx present: 0x%llx", amfi_entitlements, present);
-    }
-}
-
-void fixup_tfplatform(uint64_t proc, uint64_t proc_ucred, uint64_t amfi_entitlements) {
-    uint64_t key = OSDictionary_GetItem(amfi_entitlements, "platform-application");
-    if (key == offset_osboolean_true) {
-        DEBUGLOG("platform-application is set");
-        set_tfplatform(proc);
-        modify_csflags(proc, ^(uint32_t *flags) {
-            *flags |= CS_PLATFORM_BINARY;
-        });
-    } else {
-        DEBUGLOG("platform-application is not set");
-    }
 }
 
 void fixup_sandbox(uint64_t proc, uint64_t proc_ucred, uint64_t sandbox) {
     set_sandbox_extensions(proc, proc_ucred, sandbox);
 }
 
-void fixup_cs_valid(uint64_t proc) {
+void fixup_cs_flags(uint64_t proc) {
     modify_csflags(proc, ^(uint32_t *flags) {
-        *flags |= CS_VALID;
+        if (!(*flags & CS_VALID)) {
+            DEBUGLOG("Adding CS_VALID (0x%x)", CS_VALID);
+            *flags |= CS_VALID;
+        }
+        if (!(*flags & CS_PLATFORM_BINARY)) {
+            DEBUGLOG("Adding CS_PLATFORM_BINARY (0x%x)", CS_PLATFORM_BINARY);
+            *flags |= CS_PLATFORM_BINARY;
+        }
+        if ((*flags & CS_REQUIRE_LV)) {
+            DEBUGLOG("Removing CS_REQUIRE_LV (0x%x)", CS_REQUIRE_LV);
+            *flags &= ~CS_REQUIRE_LV;
+        }
+        if ((*flags & CS_CHECK_EXPIRATION)) {
+            DEBUGLOG("Removing CS_CHECK_EXPIRATION (0x%x)", CS_CHECK_EXPIRATION);
+            *flags &= ~CS_CHECK_EXPIRATION;
+        }
+        if (!(*flags & CS_DYLD_PLATFORM)) {
+            DEBUGLOG("Adding CS_DYLD_PLATFORM (0x%x)", CS_DYLD_PLATFORM);
+            *flags |= CS_DYLD_PLATFORM;
+        }
+        if (OPT(GET_TASK_ALLOW)) {
+            if (!(*flags & CS_GET_TASK_ALLOW)) {
+                DEBUGLOG("Adding CS_GET_TASK_ALLOW (0x%x)", CS_GET_TASK_ALLOW);
+                *flags |= CS_GET_TASK_ALLOW;
+            }
+            if (!(*flags & CS_INSTALLER)) {
+                DEBUGLOG("Adding CS_INSTALLER (0x%x)", CS_INSTALLER);
+                *flags |= CS_INSTALLER;
+            }
+            if ((*flags & CS_RESTRICT)) {
+                DEBUGLOG("Removing CS_RESTRICT (0x%x)", CS_RESTRICT);
+                *flags &= ~CS_RESTRICT;
+            }
+        }
+        if (OPT(CS_DEBUGGED)) {
+            if (!(*flags & CS_DEBUGGED)) {
+                DEBUGLOG("Adding CS_DEBUGGED (0x%x)", CS_DEBUGGED);
+                *flags |= CS_DEBUGGED;
+            }
+            if ((*flags & CS_HARD)) {
+                DEBUGLOG("Removing CS_HARD (0x%x)", CS_HARD);
+                *flags &= ~CS_HARD;
+            }
+            if ((*flags & CS_KILL)) {
+                DEBUGLOG("Removing CS_KILL (0x%x)", CS_KILL);
+                *flags &= ~CS_KILL;
+            }
+        }
     });
 }
 
-void fixup_cs_flags(uint64_t proc) {
-    modify_csflags(proc, ^(uint32_t *flags) {
-        if (OPT(GET_TASK_ALLOW)) {
-            DEBUGLOG("adding get-task-allow");
-            *flags |= CS_GET_TASK_ALLOW;
-            *flags |= CS_INSTALLER;
-        }
-        if (OPT(CS_DEBUGGED)) {
-            DEBUGLOG("setting CS_DEBUGGED :(");
-            *flags |= CS_DEBUGGED;
-            *flags &= ~CS_HARD;
-            *flags &= ~CS_KILL;
+void fixup_t_flags(uint64_t proc) {
+    modify_t_flags(proc, ^(uint32_t *flags) {
+        if (!(*flags & TF_PLATFORM)) {
+            DEBUGLOG("Adding TF_PLATFORM (0x%x)", TF_PLATFORM);
+            *flags |= TF_PLATFORM;
         }
     });
 }
@@ -387,30 +395,37 @@ void fixup_cs_flags(uint64_t proc) {
 void fixup(pid_t pid, const char *path, bool unrestrict) {
     uint64_t proc = proc_find(pid);
     if (proc == 0) {
-        DEBUGLOG("failed to find proc for pid %d!", pid);
+        DEBUGLOG("Failed to find proc for pid 0x%x (path %s)", pid, path);
         return;
     }
+    
     if (!unrestrict) {
-        DEBUGLOG("fixup_cs_valid");
-        fixup_cs_valid(proc);
+        DEBUGLOG("Fixing up codesign validity for pid 0x%x (path %s)", pid, path);
+        fixup_cs_flags(proc);
         return;
     }
+    
     uint64_t proc_ucred = rk64(proc + offsetof_p_ucred);
+    if (proc_ucred == 0) {
+        DEBUGLOG("Failed to find proc credentials for pid 0x%x (path %s)", pid, path);
+        return;
+    }
+    
     uint64_t amfi_entitlements = rk64(rk64(proc_ucred + 0x78) + 0x8);
     uint64_t sandbox = rk64(rk64(proc_ucred + 0x78) + 0x8 + 0x8);
 
-    DEBUGLOG("fixup_setuid");
+    DEBUGLOG("Fixing up setuid for pid 0x%x (path %s)", pid, path);
     fixup_setuid(pid, proc, proc_ucred, path);
-    DEBUGLOG("fixup_sandbox");
+    DEBUGLOG("Fixing up sandbox for pid 0x%x (path %s)", pid, path);
     fixup_sandbox(proc, proc_ucred, sandbox);
-    DEBUGLOG("fixup_tfplatform");
-    fixup_tfplatform(proc, proc_ucred, amfi_entitlements);
-    DEBUGLOG("fixup_cs_flags");
+    DEBUGLOG("Fixing up task flags for pid 0x%x (path %s)", pid, path);
+    fixup_t_flags(proc);
+    DEBUGLOG("Fixing up codesign flags for pid 0x%x (path %s)", pid, path);
     fixup_cs_flags(proc);
-    DEBUGLOG("set_amfi_entitlements");
+    DEBUGLOG("Fixing up AMFI entitlements for pid 0x%x (path %s)", pid, path);
     set_amfi_entitlements(proc, proc_ucred, amfi_entitlements, sandbox);
 }
 
 void kern_utils_cleanup() {
-    release_exception_osarray();
+    return;
 }

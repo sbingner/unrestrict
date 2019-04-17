@@ -14,6 +14,8 @@
 #include "osobject.h"
 #include "offsetof.h"
 
+#define STATIC_KERNEL_BASE 0xfffffff007004000
+
 bool initialized = false;
 uint64_t offset_options = 0;
 
@@ -22,22 +24,21 @@ void ctor() {
     bool found_offsets = false;
     kern_return_t err;
 
-    DEBUGLOG("the fun and games shall begin! (applying lube...)");
+    DEBUGLOG("Initializing");
 
-    // tfp0, kexecute
     err = host_get_special_port(mach_host_self(), HOST_LOCAL_NODE, 4, &tfp0);
     if (err != KERN_SUCCESS) {
         DEBUGLOG("host_get_special_port 4: %s", mach_error_string(err));
         tfp0 = KERN_INVALID_TASK;
         return;
     }
-    DEBUGLOG("tfp0: %x", tfp0);
+    DEBUGLOG("tfp0: 0x%x", tfp0);
 
     struct task_dyld_info dyld_info = { 0 };
     mach_msg_type_number_t count = TASK_DYLD_INFO_COUNT;
     if (task_info(tfp0, TASK_DYLD_INFO, (task_info_t)&dyld_info, &count) == 0 &&
             dyld_info.all_image_info_addr != 0 &&
-            dyld_info.all_image_info_addr != dyld_info.all_image_info_size + 0xfffffff007004000) {
+            dyld_info.all_image_info_addr != dyld_info.all_image_info_size + STATIC_KERNEL_BASE) {
         kernel_slide = dyld_info.all_image_info_size;
         size_t blob_size = rk64(dyld_info.all_image_info_addr);
         DEBUGLOG("Restoring persisted offsets cache length %zu from 0x%llx", blob_size, dyld_info.all_image_info_addr);
@@ -50,7 +51,7 @@ void ctor() {
                 kernel_base = get_offset("kernel_base");
             } else {
                 DEBUGLOG("Didn't get kernel_base from cache???");
-                kernel_base = dyld_info.all_image_info_size + 0xfffffff007004000;
+                kernel_base = dyld_info.all_image_info_size + STATIC_KERNEL_BASE;
             }
 
             offset_kernel_task = get_offset("kernel_task");
@@ -114,14 +115,14 @@ void ctor() {
         found_offsets = true;
     }
 
-    DEBUGLOG("kern base: %llx, slide: %llx", kernel_base, kernel_slide);
-    DEBUGLOG("offset_kernel_task: %llx", offset_kernel_task);
-    DEBUGLOG("offset_zonemap: %llx", offset_zonemap);
-    DEBUGLOG("offset_add_ret_gadget: %llx", offset_add_ret_gadget);
-    DEBUGLOG("offset_osboolean_true: %llx", offset_osboolean_true);
-    DEBUGLOG("offset_osboolean_false: %llx", offset_osboolean_false);
-    DEBUGLOG("offset_osunserializexml: %llx", offset_osunserializexml);
-    DEBUGLOG("offset_smalloc: %llx", offset_smalloc);
+    DEBUGLOG("kernel_base: 0x%llx, kernel_slide: 0x%llx", kernel_base, kernel_slide);
+    DEBUGLOG("offset_kernel_task: 0x%llx", offset_kernel_task);
+    DEBUGLOG("offset_zonemap: 0x%llx", offset_zonemap);
+    DEBUGLOG("offset_add_ret_gadget: 0x%llx", offset_add_ret_gadget);
+    DEBUGLOG("offset_osboolean_true: 0x%llx", offset_osboolean_true);
+    DEBUGLOG("offset_osboolean_false: 0x%llx", offset_osboolean_false);
+    DEBUGLOG("offset_osunserializexml: 0x%llx", offset_osunserializexml);
+    DEBUGLOG("offset_smalloc: 0x%llx", offset_smalloc);
 
     #define MEMORYSTATUS_CMD_SET_JETSAM_TASK_LIMIT 6
     extern int memorystatus_control(uint32_t command, int32_t pid, uint32_t flags, void *buffer, size_t buffersize);
@@ -136,7 +137,8 @@ void ctor() {
 
 __attribute__((destructor))
 void dtor() {
-    DEBUGLOG("Terminating kexecute");
+    DEBUGLOG("Deinitializing");
     kern_utils_cleanup();
     term_kexecute();
+    DEBUGLOG("Deinitialized");
 }

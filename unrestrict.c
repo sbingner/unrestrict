@@ -8,9 +8,6 @@
 
 FILE *log_file = NULL;
 
-#define CS_OPS_STATUS           0       /* return status */
-int csops(pid_t pid, unsigned int  ops, void * useraddr, size_t usersize);
-
 bool MSunrestrict0(mach_port_t task) {
     if (!initialized) return true;
 
@@ -29,8 +26,8 @@ bool MSunrestrict0(mach_port_t task) {
         return true;
     }
 
-    DEBUGLOG("%s: (%d) fixing up", pathbuf, pid);
     fixup(pid, pathbuf, true);
+    
     return true;
 }
 
@@ -52,13 +49,7 @@ bool MSrevalidate0(mach_port_t task) {
         return true;
     }
 
-    uint32_t status;
-    if (csops(pid, CS_OPS_STATUS, &status, sizeof(status)) < 0)
-        return true;
-
-    if ((status & CS_VALID) == 0) {
-        fixup(pid, pathbuf, false);
-    }
+    fixup(pid, pathbuf, false);
 
     return true;
 }
