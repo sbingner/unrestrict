@@ -8,7 +8,7 @@ OBJ	= $(SRC:.c=.o)
 
 CC      = xcrun -sdk iphoneos gcc $(patsubst %,-arch %,$(ARCHS))
 LDID    = ldid
-CFLAGS  = -I. -Ihelpers -Ioffset-cache -Ikernel_call -Wno-deprecated-declarations -g
+CFLAGS  = -I. -Ihelpers -Ioffset-cache -Ikernel_call -Wno-deprecated-declarations -g -DHAVE_MAIN
 LDFLAGS = -framework IOKit -framework CoreFoundation
 
 ifeq ($(DEBUG),1)

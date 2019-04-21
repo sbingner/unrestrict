@@ -19,8 +19,7 @@
 bool initialized = false;
 uint64_t offset_options = 0;
 
-__attribute__((constructor))
-void ctor() {
+void unrestrict_init() {
     bool found_offsets = false;
     kern_return_t err;
 
@@ -173,10 +172,21 @@ void ctor() {
     }
 }
 
-__attribute__((destructor))
-void dtor() {
+void unrestrict_deinit() {
     DEBUGLOG("Deinitializing");
     kern_utils_cleanup();
     term_kexecute();
     DEBUGLOG("Deinitialized");
 }
+
+#ifdef HAVE_MAIN
+__attribute__((constructor))
+static void ctor() {
+    unrestrict_init();
+}
+
+__attribute__((destructor))
+static void dtor() {
+    unrestrict_deinit();
+}
+#endif
