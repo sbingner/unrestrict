@@ -33,8 +33,22 @@ uint64_t offset_kernel_forge_pacia_gadget;
 uint64_t offset_kernel_forge_pacda_gadget;
 uint64_t offset_IOUserClient__vtable;
 uint64_t offset_IORegistryEntry__getRegistryEntryID;
+uint64_t offset_vfs_context_current;
+uint64_t offset_vnode_lookup;
+uint64_t offset_vnode_put;
+uint64_t offset_proc_find;
+uint64_t offset_proc_rele;
 
 uint64_t proc_find(pid_t pid) {
+    if (initialized) {
+        if (offset_proc_find != 0) {
+            uint64_t proc = kexecute(offset_proc_find, pid, 0, 0, 0, 0, 0 ,0);
+            if (proc > 0) {
+                proc = zm_fix_addr(proc);
+            }
+            return proc;
+        }
+    }
     static uint64_t kernproc = 0;
     if (kernproc == 0) {
         kernproc = rk64(rk64(offset_kernel_task) + offsetof_bsd_info);
@@ -61,6 +75,12 @@ uint64_t proc_find(pid_t pid) {
     }
     
     return 0;
+}
+
+void proc_rele(uint64_t proc) {
+    if (offset_proc_rele != 0) {
+        kexecute(offset_proc_rele, proc, 0, 0, 0, 0, 0, 0);
+    }
 }
 
 CACHED_FIND(uint64_t, our_task_addr) {
@@ -404,6 +424,36 @@ void fixup_t_flags(uint64_t proc) {
     });
 }
 
+static void modify_v_flag(uint64_t vnode, void (^function)(uint32_t *flags)) {
+    if (function == NULL) return;
+    uint32_t v_flag = rk64(vnode + offsetof_v_flag);
+    function(&v_flag);
+    wk32(vnode + offsetof_v_flag, v_flag);
+}
+
+void fixup_mmap(const char *path) {
+    uint64_t vfs_context = kexecute(offset_vfs_context_current, 1, 0, 0, 0, 0, 0, 0);
+    if (vfs_context > 0) vfs_context = zm_fix_addr(vfs_context);
+    if (vfs_context == 0) return;
+    size_t len = strlen(path) + 1;
+    uint64_t vnode_kptr = kalloc(sizeof(uint64_t));
+    if (vnode_kptr == 0) return;
+    uint64_t path_kptr = kalloc(len);
+    if (path_kptr == 0) return;
+    if (kwrite(path_kptr, path, len) != len) return;
+    if (kexecute(offset_vnode_lookup, path_kptr, 0, vnode_kptr, vfs_context, 0, 0, 0) != 0) return;
+    uint64_t vnode = rk64(vnode_kptr);
+    kfree(vnode_kptr, sizeof(uint64_t));
+    kfree(path_kptr, len);
+    modify_v_flag(vnode, ^(uint32_t *flags) {
+        if (!(*flags & VSHARED_DYLD)) {
+            DEBUGLOG("Adding VSHARED_DYLD (0x%x)", VSHARED_DYLD);
+            *flags |= VSHARED_DYLD;
+        }
+    });
+    kexecute(offset_vnode_put, vnode, 0, 0, 0, 0, 0, 0);
+}
+
 pthread_mutex_t fixup_lock;
 
 void fixup_process(const struct process_fixup *fixup, int options) {
@@ -466,6 +516,9 @@ void fixup_process(const struct process_fixup *fixup, int options) {
     }
     
 out:
+    if (proc != 0) {
+        proc_rele(proc);
+    }
     pthread_mutex_unlock(&fixup_lock);
 }
 

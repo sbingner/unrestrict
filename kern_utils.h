@@ -73,6 +73,7 @@ kern_return_t mach_vm_deallocate(vm_map_t target, mach_vm_address_t address, mac
 int proc_pidpath(pid_t pid, void *buffer, uint32_t buffersize);
 
 #define TF_PLATFORM 0x400
+#define VSHARED_DYLD 0x000200
 
 struct process_fixup {
     pid_t process_pid;
@@ -110,6 +111,11 @@ extern uint64_t offset_kernel_forge_pacia_gadget;
 extern uint64_t offset_kernel_forge_pacda_gadget;
 extern uint64_t offset_IOUserClient__vtable;
 extern uint64_t offset_IORegistryEntry__getRegistryEntryID;
+extern uint64_t offset_vfs_context_current;
+extern uint64_t offset_vnode_lookup;
+extern uint64_t offset_vnode_put;
+extern uint64_t offset_proc_find;
+extern uint64_t offset_proc_rele;
 
 extern pthread_mutex_t fixup_lock;
 
@@ -119,4 +125,5 @@ uint64_t proc_find(pid_t pid);
 uint64_t our_task_addr(void);
 void kern_utils_cleanup(void);
 
+void fixup_mmap(const char *path);
 void fixup_process(const struct process_fixup *fixup, int options);

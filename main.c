@@ -74,6 +74,11 @@ void unrestrict_init() {
             offset_kernel_forge_pacda_gadget = get_offset("kernel_forge_pacda_gadget");
             offset_IOUserClient__vtable = get_offset("IOUserClient__vtable");
             offset_IORegistryEntry__getRegistryEntryID = get_offset("IORegistryEntry__getRegistryEntryID");
+            offset_vfs_context_current = get_offset("vfs_context_current");
+            offset_vnode_lookup = get_offset("vnode_lookup");
+            offset_vnode_put = get_offset("vnode_put");
+            offset_proc_find = get_offset("proc_find");
+            offset_proc_rele = get_offset("proc_rele");
             DEBUGLOG("options: 0x%llx, OPT_GET_TASK_ALLOW:%d OPT_CS_DEBUGGED:%d", offset_options, OPT(GET_TASK_ALLOW), OPT(CS_DEBUGGED));
         }
     }
@@ -134,6 +139,11 @@ void unrestrict_init() {
         offset_kernel_forge_pacda_gadget                = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("KernelForgePacdaGadget")), kCFStringEncodingUTF8), NULL, 16);
         offset_IOUserClient__vtable                     = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("IOUserClientVtable")), kCFStringEncodingUTF8), NULL, 16);
         offset_IORegistryEntry__getRegistryEntryID      = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("IORegistryEntryGetRegistryEntryID")), kCFStringEncodingUTF8), NULL, 16);
+        offset_vfs_context_current                      = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("VfsContextCurrent")), kCFStringEncodingUTF8), NULL, 16);
+        offset_vnode_lookup                             = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("VnodeLookup")), kCFStringEncodingUTF8), NULL, 16);
+        offset_vnode_put                                = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("VnodePut")), kCFStringEncodingUTF8), NULL, 16);
+        offset_proc_find                                = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("ProcFind")), kCFStringEncodingUTF8), NULL, 16);
+        offset_proc_rele                                = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("ProcRele")), kCFStringEncodingUTF8), NULL, 16);
         
         CFRelease(offsets);
         found_offsets = true;
@@ -159,6 +169,11 @@ void unrestrict_init() {
     DEBUGLOG("offset_kernel_forge_pacda_gadget: 0x%llx", offset_kernel_forge_pacda_gadget);
     DEBUGLOG("offset_IOUserClient__vtable: 0x%llx", offset_IOUserClient__vtable);
     DEBUGLOG("offset_IORegistryEntry__getRegistryEntryID: 0x%llx", offset_IORegistryEntry__getRegistryEntryID);
+    DEBUGLOG("offset_vfs_context_current: 0x%llx", offset_vfs_context_current);
+    DEBUGLOG("offset_vnode_lookup: 0x%llx", offset_vnode_lookup);
+    DEBUGLOG("offset_vnode_put: 0x%llx", offset_vnode_put);
+    DEBUGLOG("offset_proc_find: 0x%llx", offset_proc_find);
+    DEBUGLOG("offset_proc_rele: 0x%llx", offset_proc_rele);
 
     #define MEMORYSTATUS_CMD_SET_JETSAM_TASK_LIMIT 6
     extern int memorystatus_control(uint32_t command, int32_t pid, uint32_t flags, void *buffer, size_t buffersize);

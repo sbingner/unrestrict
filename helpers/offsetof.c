@@ -24,3 +24,5 @@
 #else
 #define offsetof_t_flags (unsigned)((kCFCoreFoundationVersionNumber >= 1535.12) ? (0x390) : (0x3a0)) // task::t_flags
 #endif
+
+#define offsetof_v_flag (unsigned)(0x54) // vnode::v_flag
