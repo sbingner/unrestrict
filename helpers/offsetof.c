@@ -4,7 +4,7 @@
 #define offsetof_p_svgid (unsigned)((kCFCoreFoundationVersionNumber >= 1535.12) ? (0x36) : (0x44)) // proc_t::svgid
 #define offsetof_p_ucred (unsigned)((kCFCoreFoundationVersionNumber >= 1535.12) ? (0xf8) : (0x100)) // proc_t::p_ucred
 #define offsetof_p_csflags (unsigned)((kCFCoreFoundationVersionNumber >= 1535.12) ? (0x290) : (0x2a8)) // proc_t::p_csflags
-#define offsetof_p_p_list (unsigned)(0x8) // proc_t::p_list
+#define offsetof_p_p_list (unsigned)(0x0) // proc_t::p_list
 #define offsetof_itk_space (unsigned)((kCFCoreFoundationVersionNumber >= 1443.00) ? ((kCFCoreFoundationVersionNumber >= 1535.12) ? (0x300) : (0x308)) : (0x300)) // task_t::itk_space
 #if __arm64e__
 #define offsetof_bsd_info (unsigned)(0x368) // task_t::bsd_info

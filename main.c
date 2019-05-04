@@ -14,6 +14,9 @@
 #include "osobject.h"
 #include "offsetof.h"
 
+#define MEMORYSTATUS_CMD_SET_JETSAM_TASK_LIMIT 6
+extern int memorystatus_control(uint32_t command, int32_t pid, uint32_t flags, void *buffer, size_t buffersize);
+
 #define STATIC_KERNEL_BASE 0xfffffff007004000
 
 bool initialized = false;
@@ -27,7 +30,7 @@ void unrestrict_init() {
 
     err = host_get_special_port(mach_host_self(), HOST_LOCAL_NODE, 4, &tfp0);
     if (err != KERN_SUCCESS) {
-        DEBUGLOG("host_get_special_port 4: %s", mach_error_string(err));
+        CROAK("host_get_special_port 4: %s", mach_error_string(err));
         tfp0 = KERN_INVALID_TASK;
         return;
     }
@@ -79,6 +82,12 @@ void unrestrict_init() {
             offset_vnode_put = get_offset("vnode_put");
             offset_proc_find = get_offset("proc_find");
             offset_proc_rele = get_offset("proc_rele");
+            offset_sstrdup = get_offset("sstrdup");
+            offset_extension_create_file = get_offset("extension_create_file");
+            offset_extension_add = get_offset("extension_add");
+            offset_extension_release = get_offset("extension_release");
+            offset_strlen = get_offset("strlen");
+            offset_sfree = get_offset("sfree");
             DEBUGLOG("options: 0x%llx, OPT_GET_TASK_ALLOW:%d OPT_CS_DEBUGGED:%d", offset_options, OPT(GET_TASK_ALLOW), OPT(CS_DEBUGGED));
         }
     }
@@ -86,7 +95,7 @@ void unrestrict_init() {
     if (!found_offsets) {
         CFURLRef fileURL = CFURLCreateWithFileSystemPath(kCFAllocatorDefault, CFSTR("/jb/offsets.plist"), kCFURLPOSIXPathStyle, false);
         if (fileURL == NULL) {
-            DEBUGLOG("Unable to create URL");
+            CROAK("Unable to create URL");
             return;
         }
         CFDataRef off_file_data;
@@ -97,7 +106,7 @@ void unrestrict_init() {
 
         CFRelease(fileURL);
         if (!status) {
-            DEBUGLOG("Unable to read /jb/offsets.plist");
+            CROAK("Unable to read /jb/offsets.plist");
             return;
         }
 
@@ -105,12 +114,12 @@ void unrestrict_init() {
         CFPropertyListRef offsets = CFPropertyListCreateWithData(kCFAllocatorDefault, (CFDataRef)off_file_data, kCFPropertyListImmutable, NULL, NULL);
         CFRelease(off_file_data);
         if (offsets == NULL) {
-            DEBUGLOG("Unable to convert /jb/offsets.plist to property list");
+            CROAK("Unable to convert /jb/offsets.plist to property list");
             return;
         }
 
         if (CFGetTypeID(offsets) != CFDictionaryGetTypeID()) {
-            DEBUGLOG("/jb/offsets.plist did not convert to a dictionary");
+            CROAK("/jb/offsets.plist did not convert to a dictionary");
             CFRelease(offsets);
             return;
         }
@@ -144,6 +153,12 @@ void unrestrict_init() {
         offset_vnode_put                                = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("VnodePut")), kCFStringEncodingUTF8), NULL, 16);
         offset_proc_find                                = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("ProcFind")), kCFStringEncodingUTF8), NULL, 16);
         offset_proc_rele                                = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("ProcRele")), kCFStringEncodingUTF8), NULL, 16);
+        offset_sstrdup                                  = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("Sstrdup")), kCFStringEncodingUTF8), NULL, 16);
+        offset_extension_create_file                    = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("ExtensionCreateFile")), kCFStringEncodingUTF8), NULL, 16);
+        offset_extension_add                            = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("ExtensionAdd")), kCFStringEncodingUTF8), NULL, 16);
+        offset_extension_release                        = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("ExtensionRelease")), kCFStringEncodingUTF8), NULL, 16);
+        offset_strlen                                   = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("Strlen")), kCFStringEncodingUTF8), NULL, 16);
+        offset_sfree                                    = strtoull(CFStringGetCStringPtr(CFDictionaryGetValue(offsets, CFSTR("Sfree")), kCFStringEncodingUTF8), NULL, 16);
         
         CFRelease(offsets);
         found_offsets = true;
@@ -174,16 +189,25 @@ void unrestrict_init() {
     DEBUGLOG("offset_vnode_put: 0x%llx", offset_vnode_put);
     DEBUGLOG("offset_proc_find: 0x%llx", offset_proc_find);
     DEBUGLOG("offset_proc_rele: 0x%llx", offset_proc_rele);
-
-    #define MEMORYSTATUS_CMD_SET_JETSAM_TASK_LIMIT 6
-    extern int memorystatus_control(uint32_t command, int32_t pid, uint32_t flags, void *buffer, size_t buffersize);
+    DEBUGLOG("offset_sstrdup: 0x%llx", offset_sstrdup);
+    DEBUGLOG("offset_extension_create_file: 0x%llx", offset_extension_create_file);
+    DEBUGLOG("offset_extension_add: 0x%llx", offset_extension_add);
+    DEBUGLOG("offset_extension_release: 0x%llx", offset_extension_release);
+    DEBUGLOG("offset_strlen: 0x%llx", offset_strlen);
+    DEBUGLOG("offset_sfree: 0x%llx", offset_sfree);
     
-    if (found_offsets && init_kexecute() && OSDictionary_SetItem(rk64(rk64(rk64(proc_find(getpid()) + offsetof_p_ucred) + 0x78) + 0x8), "com.apple.private.memorystatus", offset_osboolean_true) && memorystatus_control(MEMORYSTATUS_CMD_SET_JETSAM_TASK_LIMIT, getpid(), 0, NULL, 0) == 0) {
+    if (!found_offsets) {
+        CROAK("Failed to find offsets");
+    } else if (!init_kexecute()) {
+        CROAK("Failed to initialize kexecute");
+    } else if (!OSDictionary_SetItem(rk64(rk64(rk64(proc_find(getpid()) + offsetof_p_ucred) + 0x78) + 0x8), "com.apple.private.memorystatus", offset_osboolean_true)) {
+        CROAK("Failed to entitle myself");
+    } else if (memorystatus_control(MEMORYSTATUS_CMD_SET_JETSAM_TASK_LIMIT, getpid(), 0, NULL, 0) != 0) {
+        CROAK("Failed to bypass memory limit");
+    } else {
         DEBUGLOG("Initialized successfully!");
         pthread_mutex_init(&fixup_lock, NULL);
         initialized = true;
-    } else {
-        DEBUGLOG("Failed to initialize kexecute :(");
     }
 }
 

@@ -1,5 +1,3 @@
-#include <pthread.h>
-
 #include "kern_utils.h"
 #include "common.h"
 #include "kexecute.h"
@@ -10,33 +8,36 @@
 #include "kc_parameters.h"
 #include "kernel_memory.h"
 
-mach_port_t prepare_user_client() {
+#ifndef __arm64e__
+
+static mach_port_t prepare_user_client() {
     kern_return_t err;
     mach_port_t user_client;
     io_service_t service = IOServiceGetMatchingService(kIOMasterPortDefault, IOServiceMatching("IOSurfaceRoot"));
     
     if (service == IO_OBJECT_NULL) {
-        DEBUGLOG(" [-] unable to find service");
+        CROAK("Unable to find service");
         exit(EXIT_FAILURE);
     }
     
     err = IOServiceOpen(service, mach_task_self(), 0, &user_client);
     if (err != KERN_SUCCESS) {
-        DEBUGLOG(" [-] unable to get user client connection");
+        CROAK("Unable to get user client connection");
         exit(EXIT_FAILURE);
     }
     
-    DEBUGLOG("got user client: 0x%x", user_client);
+    DEBUGLOG("Got user client: 0x%x", user_client);
     return user_client;
 }
 
-pthread_mutex_t kexecute_lock;
 static mach_port_t user_client;
 static uint64_t IOSurfaceRootUserClient_port;
 static uint64_t IOSurfaceRootUserClient_addr;
 static uint64_t fake_vtable;
 static uint64_t fake_client;
 const int fake_kalloc_size = 0x1000;
+#endif
+pthread_mutex_t kexecute_lock;
 
 bool init_kexecute() {
 #if __arm64e__
@@ -127,7 +128,7 @@ uint64_t kexecute(uint64_t addr, uint64_t x0, uint64_t x1, uint64_t x2, uint64_t
     uint64_t offx28 = rk64(fake_client+0x48);
     wk64(fake_client+0x40, x0);
     wk64(fake_client+0x48, addr);
-    returnval = IOConnectTrap6(user_client, 0, (uint64_t)(x1), (uint64_t)(x2), (uint64_t)(x3), (uint64_t)(x4), (uint64_t)(x5), (uint64_t)(x6));
+    returnval = IOConnectTrap6(user_client, 0, x1, x2, x3, x4, x5, x6);
     wk64(fake_client+0x40, offx20);
     wk64(fake_client+0x48, offx28);
 #endif

@@ -5,7 +5,7 @@
 #define MAX_CHUNK_SIZE 0xFFF
 
 size_t kread(uint64_t where, void *p, size_t size) {
-    int rv;
+    kern_return_t rv = KERN_FAILURE;
     size_t offset = 0;
     while (offset < size) {
         mach_vm_size_t sz, chunk = MAX_CHUNK_SIZE;
@@ -13,8 +13,8 @@ size_t kread(uint64_t where, void *p, size_t size) {
             chunk = size - offset;
         }
         rv = mach_vm_read_overwrite(tfp0, where + offset, chunk, (mach_vm_address_t)p + offset, &sz);
-        if (rv || sz == 0) {
-            DEBUGLOG("[e] error reading kernel @%p", (void *)(offset + where));
+        if (rv != KERN_SUCCESS || sz == 0) {
+            CROAK("Error reading kernel memory @%p: %s", (void *)(offset + where), mach_error_string(rv));
             break;
         }
         offset += sz;
@@ -23,7 +23,7 @@ size_t kread(uint64_t where, void *p, size_t size) {
 }
 
 size_t kwrite(uint64_t where, const void *p, size_t size) {
-    int rv;
+    kern_return_t rv = KERN_FAILURE;
     size_t offset = 0;
     while (offset < size) {
         size_t chunk = MAX_CHUNK_SIZE;
@@ -31,23 +31,13 @@ size_t kwrite(uint64_t where, const void *p, size_t size) {
             chunk = size - offset;
         }
         rv = mach_vm_write(tfp0, where + offset, (mach_vm_offset_t)p + offset, chunk);
-        if (rv) {
-            DEBUGLOG("[e] error writing kernel @%p", (void *)(offset + where));
+        if (rv != KERN_SUCCESS) {
+            CROAK("Error writing kernel memory @%p: %s", (void *)(offset + where), mach_error_string(rv));
             break;
         }
         offset += chunk;
     }
     return offset;
-}
-
-uint64_t kalloc(vm_size_t size) {
-    mach_vm_address_t address = 0;
-    mach_vm_allocate(tfp0, (mach_vm_address_t *)&address, size, VM_FLAGS_ANYWHERE);
-    return address;
-}
-
-void kfree(mach_vm_address_t address, vm_size_t size) {
-    mach_vm_deallocate(tfp0, address, size);
 }
 
 uint16_t rk16(uint64_t kaddr) {
@@ -80,7 +70,24 @@ void wk64(uint64_t kaddr, uint64_t val) {
     kwrite(kaddr, &val, sizeof(val));
 }
 
-// thx Siguza
+uint64_t kalloc(vm_size_t size) {
+    mach_vm_address_t address = 0;
+    kern_return_t rv = mach_vm_allocate(tfp0, (mach_vm_address_t *)&address, size, VM_FLAGS_ANYWHERE);
+    if (rv != KERN_SUCCESS) {
+        CROAK("Error allocating kernel memory with size %zu: %s", size, mach_error_string(rv));
+    }
+    return address;
+}
+
+void kfree(mach_vm_address_t address, vm_size_t size) {
+    kern_return_t rv = mach_vm_deallocate(tfp0, address, size);
+    if (rv != KERN_SUCCESS) {
+        CROAK("Error deallocating kernel memory with size %zu: %s", size, mach_error_string(rv));
+    }
+}
+
+// Thanks to @Siguza
+
 typedef struct {
     uint64_t prev;
     uint64_t next;
@@ -99,12 +106,12 @@ uint64_t zm_fix_addr(uint64_t addr) {
         size_t r = kread(zone_map + 0x10, &zm_hdr, sizeof(zm_hdr));
         
         if (r != sizeof(zm_hdr) || zm_hdr.start == 0 || zm_hdr.end == 0) {
-            DEBUGLOG("kread of zone_map failed!");
+            CROAK("Reading zone_map from kernel memory failed");
             return 0;
         }
 
         if (zm_hdr.end - zm_hdr.start > 0x100000000) {
-            DEBUGLOG("zone_map is too big, sorry.");
+            CROAK("Failed to verify zone_map");
             return 0;
         }
     }

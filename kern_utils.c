@@ -38,129 +38,30 @@ uint64_t offset_vnode_lookup;
 uint64_t offset_vnode_put;
 uint64_t offset_proc_find;
 uint64_t offset_proc_rele;
+uint64_t offset_sstrdup;
+uint64_t offset_extension_create_file;
+uint64_t offset_extension_add;
+uint64_t offset_extension_release;
+uint64_t offset_strlen;
+uint64_t offset_sfree;
 
-uint64_t proc_find(pid_t pid) {
-    if (initialized) {
-        if (offset_proc_find != 0) {
-            uint64_t proc = kexecute(offset_proc_find, pid, 0, 0, 0, 0, 0 ,0);
-            if (proc > 0) {
-                proc = zm_fix_addr(proc);
-            }
-            return proc;
-        }
-    }
-    static uint64_t kernproc = 0;
-    if (kernproc == 0) {
-        kernproc = rk64(rk64(offset_kernel_task) + offsetof_bsd_info);
-        if (kernproc == 0) {
-            DEBUGLOG("failed to find kernproc!");
-            return 0;
-        }
-    }
-    
-    uint64_t proc = kernproc;
-    
-    if (pid == 0) {
-        return proc;
-    }
-    
-    while (proc) {
-        uint32_t found_pid = rk32(proc + offsetof_p_pid);
-        
-        if (found_pid == pid) {
-            return proc;
-        }
-        
-        proc = rk64(proc + offsetof_p_p_list);
-    }
-    
-    return 0;
-}
+static const char* abs_path_exceptions[] = {
+    "/Library",
+    "/private/var/mobile/Library",
+    "/System/Library/Caches",
+    "/private/var/mnt",
+    NULL
+};
 
-void proc_rele(uint64_t proc) {
-    if (offset_proc_rele != 0) {
-        kexecute(offset_proc_rele, proc, 0, 0, 0, 0, 0, 0);
-    }
-}
+static const char *file_exc_key = "com.apple.security.exception.files.absolute-path.read-only";
 
-CACHED_FIND(uint64_t, our_task_addr) {
-    uint64_t proc = proc_find(getpid());
-    if (proc == 0) {
-        DEBUGLOG("failed to get proc!");
-        return 0;
-    }
-    uint64_t task_addr = rk64(proc + offsetof_task);
-    if (task_addr == 0) {
-        DEBUGLOG("failed to get task_addr!");
-        return 0;
-    }
-    return task_addr;
-}
-
-uint64_t find_port(mach_port_name_t port) {
-    static uint64_t is_table = 0;
-    if (is_table == 0) {
-        uint64_t task_addr = our_task_addr();
-        if (!task_addr) {
-            DEBUGLOG("failed to get task_addr!");
-            return 0;
-        }
-        uint64_t itk_space = rk64(task_addr + offsetof_itk_space);
-        if (!itk_space) {
-            DEBUGLOG("failed to get itk_space!");
-            return 0;
-        }
-        is_table = rk64(itk_space + offsetof_ipc_space_is_table);
-        if (!is_table) {
-            DEBUGLOG("failed to get is_table!");
-            return 0;
-        }
-    }
-  
-    uint32_t port_index = port >> 8;
-    const int sizeof_ipc_entry_t = 0x18;
-    uint64_t port_addr = rk64(is_table + (port_index * sizeof_ipc_entry_t));
-    if (port_addr == 0) {
-        DEBUGLOG("failed to get port_addr!");
-        return 0;
-    }
-    return port_addr;
-}
+pthread_mutex_t fixup_lock;
 
 static void modify_csflags(uint64_t proc, void (^function)(uint32_t *flags)) {
     if (function == NULL) return;
     uint32_t csflags = rk32(proc + offsetof_p_csflags);
     function(&csflags);
     wk32(proc + offsetof_p_csflags, csflags);
-}
-
-void fixup_setuid(pid_t pid, uint64_t proc, uint64_t ucred, const char *path) {
-    struct stat file_st;
-    if (lstat(path, &file_st) == -1) {
-        DEBUGLOG("Unable to get stat for file %s", path);
-        return;
-    }
-    
-    if (!(file_st.st_mode & S_ISUID) && !(file_st.st_mode & S_ISGID)) {
-        DEBUGLOG("File is not setuid or setgid: %s", path);
-        return;
-    }
-    
-    if (file_st.st_mode & S_ISUID) {
-        uid_t file_uid = file_st.st_uid;
-        DEBUGLOG("Applying uid 0x%x to process 0x%x", file_uid, pid);
-        wk32(proc + offsetof_p_svuid, file_uid);
-        wk32(ucred + offsetof_ucred_cr_svuid, file_uid);
-        wk32(ucred + offsetof_ucred_cr_uid, file_uid);
-    }
-
-    if (file_st.st_mode & S_ISGID) {
-        gid_t file_gid = file_st.st_gid;
-        DEBUGLOG("Applying gid 0x%x to process 0x%x", file_gid, pid);
-        wk32(proc + offsetof_p_svgid, file_gid);
-        wk32(ucred + offsetof_ucred_cr_svgid, file_gid);
-        wk32(ucred + offsetof_ucred_cr_groups, file_gid);
-    }
 }
 
 static void modify_t_flags(uint64_t proc, void (^function)(uint32_t *flags)) {
@@ -171,13 +72,82 @@ static void modify_t_flags(uint64_t proc, void (^function)(uint32_t *flags)) {
     wk32(task + offsetof_t_flags, t_flags);
 }
 
-const char* abs_path_exceptions[] = {
-    "/Library",
-    "/private/var/mobile/Library",
-    "/System/Library/Caches",
-    "/private/var/mnt",
-    NULL
-};
+uint64_t proc_find(pid_t pid) {
+    if (initialized) {
+        uint64_t proc = kexecute(offset_proc_find, pid, 0, 0, 0, 0, 0 ,0);
+        if (proc > 0) {
+            proc = zm_fix_addr(proc);
+        }
+        return proc;
+    }
+    
+    static uint64_t kernproc = 0;
+    if (kernproc == 0) {
+        kernproc = rk64(rk64(offset_kernel_task) + offsetof_bsd_info);
+        if (kernproc == 0) {
+            CROAK("Unable to get kernproc");
+            return 0;
+        }
+    }
+    
+    uint64_t proc = kernproc;
+    
+    if (pid == 0) {
+        return proc;
+    }
+    
+    while (proc != 0) {
+        uint32_t found_pid = rk32(proc + offsetof_p_pid);
+        
+        if (found_pid == pid) {
+            return proc;
+        }
+        
+        proc = rk64(proc + offsetof_p_p_list + sizeof(void *));
+    }
+    
+    return 0;
+}
+
+void proc_rele(uint64_t proc) {
+    kexecute(offset_proc_rele, proc, 0, 0, 0, 0, 0, 0);
+}
+
+CACHED_FIND(uint64_t, our_task_addr) {
+    uint64_t proc = proc_find(getpid());
+    if (proc == 0) {
+        CROAK("Unable to find proc");
+        return 0;
+    }
+    uint64_t task_addr = rk64(proc + offsetof_task);
+    return task_addr;
+}
+
+uint64_t find_port(mach_port_name_t port) {
+    static uint64_t is_table = 0;
+    if (is_table == 0) {
+        uint64_t task_addr = our_task_addr();
+        if (!task_addr) {
+            CROAK("Unable to get task_addr");
+            return 0;
+        }
+        uint64_t itk_space = rk64(task_addr + offsetof_itk_space);
+        if (!itk_space) {
+            CROAK("Unable to get itk_space");
+            return 0;
+        }
+        is_table = rk64(itk_space + offsetof_ipc_space_is_table);
+        if (!is_table) {
+            CROAK("Unable to get is_table");
+            return 0;
+        }
+    }
+  
+    uint32_t port_index = port >> 8;
+    const int sizeof_ipc_entry_t = 0x18;
+    uint64_t port_addr = rk64(is_table + (port_index * sizeof_ipc_entry_t));
+    return port_addr;
+}
 
 uint64_t get_exception_osarray(const char **exceptions) {
     uint64_t exception_osarray = 0;
@@ -230,8 +200,6 @@ void release_exception_osarray(uint64_t *exception_osarray) {
     }
 }
 
-static const char *exc_key = "com.apple.security.exception.files.absolute-path.read-only";
-
 void set_sandbox_extensions(uint64_t proc, uint64_t proc_ucred, uint64_t sandbox) {
     if (sandbox == 0) {
         DEBUGLOG("No sandbox, skipping (proc: 0x%llx)", proc);
@@ -251,7 +219,7 @@ void set_sandbox_extensions(uint64_t proc, uint64_t proc_ucred, uint64_t sandbox
     }
     
     if (ext != 0) {
-        extension_add(ext, sandbox, exc_key);
+        extension_add(ext, sandbox, file_exc_key);
     }
 }
 
@@ -311,15 +279,15 @@ void set_amfi_entitlements(uint64_t proc, uint64_t proc_ucred, uint64_t amfi_ent
         return;
     }
 
-    uint64_t present = OSDictionary_GetItem(amfi_entitlements, exc_key);
+    uint64_t present = OSDictionary_GetItem(amfi_entitlements, file_exc_key);
 
     if (present == 0) {
         uint64_t exception_osarray = get_exception_osarray(abs_path_exceptions);
         DEBUGLOG("present=NULL; setting to 0x%llx", exception_osarray);
-        rv = OSDictionary_SetItem(amfi_entitlements, exc_key, exception_osarray);
+        rv = OSDictionary_SetItem(amfi_entitlements, file_exc_key, exception_osarray);
         release_exception_osarray(&exception_osarray);
         if (rv != true) {
-            DEBUGLOG("Failed to set %s", exc_key);
+            DEBUGLOG("Failed to set %s", file_exc_key);
         }
         return;
     }
@@ -358,8 +326,30 @@ void set_amfi_entitlements(uint64_t proc, uint64_t proc_ucred, uint64_t amfi_ent
     free(currentExceptions);
 }
 
-void fixup_sandbox(uint64_t proc, uint64_t proc_ucred, uint64_t sandbox) {
-    set_sandbox_extensions(proc, proc_ucred, sandbox);
+size_t kstrlen(uint64_t ptr) {
+    size_t kstrlen = (size_t)kexecute(offset_strlen, ptr, 0, 0, 0, 0, 0, 0);
+    return kstrlen;
+}
+
+uint64_t kstralloc(const char *str) {
+    size_t str_kptr_size = strlen(str) + 1;
+    uint64_t str_kptr = kalloc(str_kptr_size);
+    if (str_kptr != 0) {
+        if (kwrite(str_kptr, str, str_kptr_size) != str_kptr_size) {
+            CROAK("Unable to write string to kernel memory");
+        }
+        kwrite(str_kptr, str, str_kptr_size);
+    } else {
+        CROAK("Unable to allocate kernel memory for string");
+    }
+    return str_kptr;
+}
+
+void kstrfree(uint64_t ptr) {
+    if (ptr != 0) {
+        size_t size = kstrlen(ptr);
+        kfree(ptr, size);
+    }
 }
 
 void fixup_cs_flags(uint64_t proc) {
@@ -424,37 +414,42 @@ void fixup_t_flags(uint64_t proc) {
     });
 }
 
-static void modify_v_flag(uint64_t vnode, void (^function)(uint32_t *flags)) {
-    if (function == NULL) return;
-    uint32_t v_flag = rk64(vnode + offsetof_v_flag);
-    function(&v_flag);
-    wk32(vnode + offsetof_v_flag, v_flag);
+void fixup_setuid(pid_t pid, uint64_t proc, uint64_t ucred, const char *path) {
+    struct stat file_st;
+    if (lstat(path, &file_st) == -1) {
+        CROAK("Unable to get stat for file %s", path);
+        return;
+    }
+    
+    if (!(file_st.st_mode & S_ISUID) && !(file_st.st_mode & S_ISGID)) {
+        DEBUGLOG("File is not setuid or setgid: %s", path);
+        return;
+    }
+    
+    if (file_st.st_mode & S_ISUID) {
+        uid_t file_uid = file_st.st_uid;
+        DEBUGLOG("Applying uid 0x%x to process 0x%x", file_uid, pid);
+        wk32(proc + offsetof_p_svuid, file_uid);
+        wk32(ucred + offsetof_ucred_cr_svuid, file_uid);
+        wk32(ucred + offsetof_ucred_cr_uid, file_uid);
+    }
+    
+    if (file_st.st_mode & S_ISGID) {
+        gid_t file_gid = file_st.st_gid;
+        DEBUGLOG("Applying gid 0x%x to process 0x%x", file_gid, pid);
+        wk32(proc + offsetof_p_svgid, file_gid);
+        wk32(ucred + offsetof_ucred_cr_svgid, file_gid);
+        wk32(ucred + offsetof_ucred_cr_groups, file_gid);
+    }
 }
 
-void fixup_mmap(const char *path) {
-    uint64_t vfs_context = kexecute(offset_vfs_context_current, 1, 0, 0, 0, 0, 0, 0);
-    if (vfs_context > 0) vfs_context = zm_fix_addr(vfs_context);
-    if (vfs_context == 0) return;
-    size_t len = strlen(path) + 1;
-    uint64_t vnode_kptr = kalloc(sizeof(uint64_t));
-    if (vnode_kptr == 0) return;
-    uint64_t path_kptr = kalloc(len);
-    if (path_kptr == 0) return;
-    if (kwrite(path_kptr, path, len) != len) return;
-    if (kexecute(offset_vnode_lookup, path_kptr, 0, vnode_kptr, vfs_context, 0, 0, 0) != 0) return;
-    uint64_t vnode = rk64(vnode_kptr);
-    kfree(vnode_kptr, sizeof(uint64_t));
-    kfree(path_kptr, len);
-    modify_v_flag(vnode, ^(uint32_t *flags) {
-        if (!(*flags & VSHARED_DYLD)) {
-            DEBUGLOG("Adding VSHARED_DYLD (0x%x)", VSHARED_DYLD);
-            *flags |= VSHARED_DYLD;
-        }
-    });
-    kexecute(offset_vnode_put, vnode, 0, 0, 0, 0, 0, 0);
+void fixup_sandbox(uint64_t proc, uint64_t proc_ucred, uint64_t sandbox) {
+    set_sandbox_extensions(proc, proc_ucred, sandbox);
 }
 
-pthread_mutex_t fixup_lock;
+void fixup_amfi_entitlements(uint64_t proc, uint64_t proc_ucred, uint64_t amfi_entitlements, uint64_t sandbox) {
+    set_amfi_entitlements(proc, proc_ucred, amfi_entitlements, sandbox);
+}
 
 void fixup_process(const struct process_fixup *fixup, int options) {
     pthread_mutex_lock(&fixup_lock);
@@ -497,13 +492,21 @@ void fixup_process(const struct process_fixup *fixup, int options) {
         goto out;
     }
     
-    uint64_t amfi_entitlements = rk64(rk64(proc_ucred + 0x78) + 0x8);
+    uint64_t cr_label = rk64(proc_ucred + 0x78);
+    
+    if (cr_label == 0) {
+        DEBUGLOG("Failed to find cr_label for pid 0x%x (path %s)", pid, path);
+        goto out;
+    }
+    
+    uint64_t amfi_entitlements = rk64(cr_label + 0x8);
+    
     if (amfi_entitlements == 0) {
         DEBUGLOG("Failed to find amfi_entitlements for pid 0x%x (path %s)", pid, path);
         goto out;
     }
     
-    uint64_t sandbox = rk64(rk64(proc_ucred + 0x78) + 0x8 + 0x8);
+    uint64_t sandbox = rk64(cr_label + 0x8 + 0x8);
     
     if ((options & FIXUP_SANDBOX)) {
         DEBUGLOG("Fixing up sandbox for pid 0x%x (path %s)", pid, path);
@@ -512,7 +515,7 @@ void fixup_process(const struct process_fixup *fixup, int options) {
     
     if ((options & FIXUP_AMFI_ENTITLEMENTS)) {
         DEBUGLOG("Fixing up AMFI entitlements for pid 0x%x (path %s)", pid, path);
-        set_amfi_entitlements(proc, proc_ucred, amfi_entitlements, sandbox);
+        fixup_amfi_entitlements(proc, proc_ucred, amfi_entitlements, sandbox);
     }
     
 out:
