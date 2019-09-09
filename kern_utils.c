@@ -66,25 +66,23 @@ CACHED_FIND(uint64_t, our_task_addr) {
 }
 
 uint64_t find_port(mach_port_name_t port) {
-    static uint64_t is_table = 0;
-    if (is_table == 0) {
-        uint64_t task_addr = our_task_addr();
-        if (!task_addr) {
-            DEBUGLOG("failed to get task_addr!");
-            return 0;
-        }
-        uint64_t itk_space = rk64(task_addr + offsetof_itk_space);
-        if (!itk_space) {
-            DEBUGLOG("failed to get itk_space!");
-            return 0;
-        }
-        is_table = rk64(itk_space + offsetof_ipc_space_is_table);
-        if (!is_table) {
-            DEBUGLOG("failed to get is_table!");
-            return 0;
-        }
+    uint64_t is_table = 0;
+    uint64_t task_addr = our_task_addr();
+    if (!task_addr) {
+        DEBUGLOG("failed to get task_addr!");
+        return 0;
     }
-  
+    uint64_t itk_space = rk64(task_addr + offsetof_itk_space);
+    if (!itk_space) {
+        DEBUGLOG("failed to get itk_space!");
+        return 0;
+    }
+    is_table = rk64(itk_space + offsetof_ipc_space_is_table);
+    if (!is_table) {
+        DEBUGLOG("failed to get is_table!");
+        return 0;
+    }
+
     uint32_t port_index = port >> 8;
     const int sizeof_ipc_entry_t = 0x18;
     uint64_t port_addr = rk64(is_table + (port_index * sizeof_ipc_entry_t));
